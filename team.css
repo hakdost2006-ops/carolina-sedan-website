@@ -1,0 +1,13 @@
+.team-photo {
+  display: block;
+  width: 104px;
+  height: 104px;
+  margin: 0 0 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 10px 26px rgba(23, 32, 27, 0.16);
+}
+
+.team-grid article {
+  align-items: flex-start;
+}
