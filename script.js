@@ -197,26 +197,45 @@ function polishLiveContent() {
     booking?.before(faq);
   }
 
-  if (!document.querySelector(".footer-links a[href*='facebook.com']")) {
-    document.querySelectorAll(".site-footer").forEach((footer) => {
-      const phone = footer.querySelector("a[href^='tel:']");
-      let links = footer.querySelector(".footer-links");
-      if (!links) {
-        links = document.createElement("div");
-        links.className = "footer-links";
-        if (phone) {
-          links.append(phone);
-        }
-        footer.append(links);
+  document.querySelectorAll(".site-footer").forEach((footer) => {
+    const phone = footer.querySelector("a[href^='tel:']");
+    let links = footer.querySelector(".footer-links");
+    if (!links) {
+      links = document.createElement("div");
+      links.className = "footer-links";
+      if (phone) {
+        links.append(phone);
       }
+      footer.append(links);
+    }
+
+    if (!links.querySelector("a[href*='share.google']")) {
+      const google = document.createElement("a");
+      google.href = "https://share.google/Iwb4OepB3fCjH3ejG";
+      google.target = "_blank";
+      google.rel = "noopener";
+      google.textContent = "Google";
+      links.append(google);
+    }
+
+    if (!links.querySelector("a[href*='facebook.com']")) {
       const facebook = document.createElement("a");
       facebook.href = "https://www.facebook.com/share/17hQheN4bK/?mibextid=wwXIfr";
       facebook.target = "_blank";
       facebook.rel = "noopener";
       facebook.textContent = "Facebook";
       links.append(facebook);
-    });
-  }
+    }
+
+    if (!links.querySelector("a[href*='x.com/carolinasedan36']")) {
+      const x = document.createElement("a");
+      x.href = "https://x.com/carolinasedan36?s=21&t=4jFG8iXkR-U6dBxISFHjPA";
+      x.target = "_blank";
+      x.rel = "noopener";
+      x.textContent = "X";
+      links.append(x);
+    }
+  });
 
   const style = document.createElement("style");
   style.textContent = `
