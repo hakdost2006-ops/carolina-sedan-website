@@ -197,12 +197,34 @@ function polishLiveContent() {
     booking?.before(faq);
   }
 
+  if (!document.querySelector(".footer-links a[href*='facebook.com']")) {
+    document.querySelectorAll(".site-footer").forEach((footer) => {
+      const phone = footer.querySelector("a[href^='tel:']");
+      let links = footer.querySelector(".footer-links");
+      if (!links) {
+        links = document.createElement("div");
+        links.className = "footer-links";
+        if (phone) {
+          links.append(phone);
+        }
+        footer.append(links);
+      }
+      const facebook = document.createElement("a");
+      facebook.href = "https://www.facebook.com/share/17hQheN4bK/?mibextid=wwXIfr";
+      facebook.target = "_blank";
+      facebook.rel = "noopener";
+      facebook.textContent = "Facebook";
+      links.append(facebook);
+    });
+  }
+
   const style = document.createElement("style");
   style.textContent = `
     .faq{padding-top:clamp(70px,9vw,116px)}
     .faq-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:28px}
     .faq-grid article{padding:24px;border:1px solid var(--line);border-radius:8px;background:var(--white)}
     .faq-grid p{color:var(--muted)}
+    .footer-links{display:flex;flex-wrap:wrap;gap:16px}
     @media(max-width:860px){.faq-grid{grid-template-columns:1fr}}
   `;
   document.head.append(style);
