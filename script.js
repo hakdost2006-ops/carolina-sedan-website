@@ -1,31 +1,61 @@
 const serviceContent = {
-  airport: { tag: "Airport Transfers", title: "Make catching a flight feel boring again.", copy: "Promote flight tracking, planned pickup times, help with luggage, and direct service between Chapel Hill, Carrboro, Durham, Raleigh, and RDU." },
-  medical: { tag: "Medical & Senior Rides", title: "Give families a dependable appointment ride.", copy: "This is where Carolina Sedan can win: scheduled pickup windows, patient drivers, clean cars, and a direct phone number for family members." },
-  campus: { tag: "University Travel", title: "Own the UNC and Duke visitor market.", copy: "Create pages for parents, guest speakers, visiting faculty, hotel pickups, game days, move-in weekends, and RDU transfers." },
-  corporate: { tag: "Corporate & Event Service", title: "Position the service as professional ground transportation.", copy: "Feature executive rides, dinners, meetings, conferences, hourly availability, discreet chauffeurs, and invoicing for repeat business clients." },
+  airport: {
+    tag: "Airport Transfers",
+    title: "Make catching a flight feel boring again.",
+    copy:
+      "Schedule direct service between Chapel Hill, Carrboro, Durham, Raleigh, and RDU with planned pickup times and room for luggage.",
+  },
+  medical: {
+    tag: "Medical & Senior Rides",
+    title: "Give families a dependable appointment ride.",
+    copy:
+      "Reserved pickup windows, patient drivers, clean cars, and direct communication help families plan appointments with less stress.",
+  },
+  campus: {
+    tag: "University Travel",
+    title: "Reliable rides for UNC and Duke visitors.",
+    copy:
+      "Parents, speakers, faculty, hotel guests, and campus visitors can schedule professional transportation for airport and local trips.",
+  },
+  corporate: {
+    tag: "Corporate & Event Service",
+    title: "Professional ground transportation for busy days.",
+    copy:
+      "Executive rides, dinners, meetings, conferences, and hourly service are handled with clear communication and professional drivers.",
+  },
 };
 
 const routeContent = {
-  "Chapel Hill to RDU": "A dedicated page for this route can answer pickup timing, flight buffer, luggage, early-morning availability, and reservation expectations.",
-  "Carrboro to RDU": "Carrboro clients often need scheduled airport pickups that do not depend on driver availability at odd hours. This route page can focus on reliability and local pickup knowledge.",
-  "UNC to RDU": "This page should speak to parents, students, faculty, guest speakers, and departments that need professional transportation between campus and the airport.",
-  "Duke to Chapel Hill": "This route can attract medical, university, and event traffic between Durham and Chapel Hill with emphasis on comfort, timing, and professional service.",
+  "Chapel Hill to RDU":
+    "Reserve a Chapel Hill to RDU ride ahead of time for early flights, luggage, and a pickup window planned around your departure.",
+  "Carrboro to RDU":
+    "Carrboro airport passengers can schedule pickup in advance instead of waiting to see whether a ride app driver is nearby.",
+  "UNC to RDU":
+    "UNC parents, students, faculty, guest speakers, and departments can book professional transportation between campus and the airport.",
+  "Duke to Chapel Hill":
+    "Travel between Durham and Chapel Hill with a scheduled driver for medical visits, university travel, meetings, and events.",
 };
 
 const serviceCards = document.querySelectorAll(".service-card");
 const serviceDetail = document.querySelector("#service-detail");
+
 serviceCards.forEach((card) => {
   card.addEventListener("click", () => {
     serviceCards.forEach((item) => item.classList.remove("active"));
     card.classList.add("active");
     const selected = serviceContent[card.dataset.service];
-    serviceDetail.innerHTML = `<p class="tag">${selected.tag}</p><h3>${selected.title}</h3><p>${selected.copy}</p>`;
+    serviceDetail.innerHTML = `
+      <p class="tag">${selected.tag}</p>
+      <h3>${selected.title}</h3>
+      <p>${selected.copy}</p>
+    `;
   });
 });
 
 const routeTabs = document.querySelectorAll(".route-tab");
 const routeTitle = document.querySelector("#route-title");
 const routeCopy = document.querySelector("#route-copy");
+
 routeTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
     routeTabs.forEach((item) => item.classList.remove("active"));
@@ -41,17 +71,32 @@ const rideType = document.querySelector("#ride-type");
 const passengers = document.querySelector("#passengers");
 const early = document.querySelector("#early");
 const output = document.querySelector("#estimate-output");
-const baseRates = { "chapel-hill": { rdu: 85, local: 45, hourly: 95 }, carrboro: { rdu: 90, local: 45, hourly: 95 }, durham: { rdu: 80, local: 50, hourly: 100 }, raleigh: { rdu: 70, local: 55, hourly: 105 } };
+
+const baseRates = {
+  "chapel-hill": { rdu: 75, local: 45, hourly: 95 },
+  carrboro: { rdu: 90, local: 45, hourly: 95 },
+  durham: { rdu: 80, local: 50, hourly: 100 },
+  raleigh: { rdu: 70, local: 55, hourly: 105 },
+};
+
 function updateEstimate() {
   const area = pickup.value;
   const type = rideType.value;
   const passengerCount = Number(passengers.value || 1);
   let estimate = baseRates[area][type];
-  if (passengerCount > 3) estimate += 15;
-  if (early.checked) estimate += 20;
+
+  if (passengerCount > 3) {
+    estimate += 15;
+  }
+
+  if (early.checked) {
+    estimate += 20;
+  }
+
   const label = type === "hourly" ? "starting hourly estimate" : "starting estimate";
   output.textContent = `$${estimate} ${label}`;
 }
+
 estimateForm.addEventListener("input", updateEstimate);
 updateEstimate();
 
@@ -60,30 +105,164 @@ const reservationSms = "+19192594030";
 const reservationForm = document.querySelector("#reservation-form");
 const reservationStatus = document.querySelector("#reservation-status");
 const reservationSubmit = reservationForm.querySelector('button[type="submit"]');
+
+const newsLinks = [
+  "news.html#chapel-hill-attractions",
+  "news.html#airport-chauffeur",
+  "news.html#chapel-hill-culture",
+  "news.html#special-events",
+  "news.html#restaurants",
+  "news.html#hidden-gems",
+  "news.html#walking-trails",
+  "news.html#hotels",
+  "news.html#ride-hailing",
+  "news.html#black-car-service",
+  "news.html#cabby-with-compassion",
+];
+
+function polishLiveContent() {
+  const heroButton = document.querySelector(".hero .button.primary");
+  if (heroButton) {
+    heroButton.textContent = "Book RDU Airport Ride";
+  }
+
+  const routeEyebrow = document.querySelector(".local-routes .eyebrow");
+  if (routeEyebrow) {
+    routeEyebrow.textContent = "Popular Routes";
+  }
+
+  const routeHeading = document.querySelector("#routes-title");
+  if (routeHeading) {
+    routeHeading.textContent = "Reserve reliable transportation on the routes local travelers use most.";
+  }
+
+  const newsHeading = document.querySelector("#news-title");
+  if (newsHeading) {
+    newsHeading.textContent = "Helpful Chapel Hill travel articles for planning local rides.";
+  }
+
+  const quoteEyebrow = document.querySelector(".estimator .eyebrow");
+  if (quoteEyebrow) {
+    quoteEyebrow.textContent = "Quick Estimate";
+  }
+
+  const quoteHeading = document.querySelector("#quote-title");
+  if (quoteHeading) {
+    quoteHeading.textContent = "Check a starting price before you reserve.";
+  }
+
+  document.querySelectorAll(".news-card a").forEach((link, index) => {
+    if (newsLinks[index]) {
+      link.href = newsLinks[index];
+    }
+  });
+
+  if (!document.querySelector("#faq")) {
+    const booking = document.querySelector("#book");
+    const faq = document.createElement("section");
+    faq.className = "section faq";
+    faq.id = "faq";
+    faq.setAttribute("aria-labelledby", "faq-title");
+    faq.innerHTML = `
+      <div class="section-heading">
+        <p class="eyebrow">Questions</p>
+        <h2 id="faq-title">Good to know before you book.</h2>
+      </div>
+      <div class="faq-grid">
+        <article>
+          <h3>How far ahead should I reserve an RDU ride?</h3>
+          <p>Book as early as you can, especially for early morning flights, holidays, UNC events, and weekends.</p>
+        </article>
+        <article>
+          <h3>What is the starting rate from Chapel Hill to RDU?</h3>
+          <p>Chapel Hill to RDU starts at $75. Final pricing depends on pickup time, passenger count, luggage, and trip details.</p>
+        </article>
+        <article>
+          <h3>Do you offer early morning pickups?</h3>
+          <p>Yes. Carolina Sedan takes scheduled airport and local reservations for early morning and late-night trips.</p>
+        </article>
+        <article>
+          <h3>Can I book for medical, hotel, or campus transportation?</h3>
+          <p>Yes. We serve medical appointments, hotels, UNC and Duke visitors, business travel, private events, and local rides.</p>
+        </article>
+      </div>
+    `;
+    booking?.before(faq);
+  }
+
+  const style = document.createElement("style");
+  style.textContent = `
+    .faq{padding-top:clamp(70px,9vw,116px)}
+    .faq-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:28px}
+    .faq-grid article{padding:24px;border:1px solid var(--line);border-radius:8px;background:var(--white)}
+    .faq-grid p{color:var(--muted)}
+    @media(max-width:860px){.faq-grid{grid-template-columns:1fr}}
+  `;
+  document.head.append(style);
+}
+
+polishLiveContent();
+
 function formatPickupTime(value) {
-  if (!value) return "Not provided";
-  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  if (!value) {
+    return "Not provided";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
+
 function buildReservationMessage(formData) {
-  return ["New Carolina Sedan reservation request", "", `Name: ${formData.get("name")}`, `Phone or email: ${formData.get("contact")}`, `Pickup date/time: ${formatPickupTime(formData.get("pickup-time"))}`, "", "Ride details:", formData.get("details")].join("\n");
+  return [
+    "New Carolina Sedan reservation request",
+    "",
+    `Name: ${formData.get("name")}`,
+    `Phone or email: ${formData.get("contact")}`,
+    `Pickup date/time: ${formatPickupTime(formData.get("pickup-time"))}`,
+    "",
+    "Ride details:",
+    formData.get("details"),
+  ].join("\n");
 }
+
 reservationForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const message = buildReservationMessage(formData);
-  const emailUrl = `mailto:${reservationEmail}?subject=${encodeURIComponent("New Carolina Sedan reservation request")}&body=${encodeURIComponent(message)}`;
+  const emailUrl = `mailto:${reservationEmail}?subject=${encodeURIComponent(
+    "New Carolina Sedan reservation request"
+  )}&body=${encodeURIComponent(message)}`;
   const smsUrl = `sms:${reservationSms}?&body=${encodeURIComponent(message)}`;
+
   reservationSubmit.disabled = true;
   reservationStatus.textContent = "Sending your reservation request...";
-  fetch(event.currentTarget.action, { method: "POST", body: formData })
+
+  fetch(event.currentTarget.action, {
+    method: "POST",
+    body: formData,
+  })
     .then(async (response) => {
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || "Unable to send reservation request.");
-      reservationStatus.textContent = "Thank you. Your request was sent to Carolina Sedan. We will follow up to confirm your ride.";
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to send reservation request.");
+      }
+
+      reservationStatus.textContent =
+        "Thank you. Your request was sent to Carolina Sedan. We will follow up to confirm your ride.";
       event.currentTarget.reset();
     })
     .catch(() => {
-      reservationStatus.innerHTML = `We could not send automatically from this preview. Please use these backup links: <a href="${emailUrl}">email request</a> or <a href="${smsUrl}">text request</a>.`;
+      reservationStatus.innerHTML = `
+        We could not send automatically from this preview. Please use these backup links:
+        <a href="${emailUrl}">email request</a>
+        or
+        <a href="${smsUrl}">text request</a>.
+      `;
     })
-    .finally(() => { reservationSubmit.disabled = false; });
+    .finally(() => {
+      reservationSubmit.disabled = false;
+    });
 });
