@@ -101,10 +101,9 @@ estimateForm.addEventListener("input", updateEstimate);
 updateEstimate();
 
 const reservationEmail = "booking@carolinasedan.com";
-const reservationSms = "+19192594030";
+const reservationSms = "+19199240568";
 const reservationForm = document.querySelector("#reservation-form");
 const reservationStatus = document.querySelector("#reservation-status");
-const reservationSubmit = reservationForm.querySelector('button[type="submit"]');
 
 const newsLinks = [
   "news.html#chapel-hill-attractions",
@@ -156,6 +155,14 @@ function polishLiveContent() {
       link.href = newsLinks[index];
     }
   });
+
+  reservationForm?.removeAttribute("action");
+  reservationForm?.removeAttribute("method");
+
+  if (reservationStatus) {
+    reservationStatus.textContent =
+      "Requests open as an email to booking@carolinasedan.com. You can also call or text 919-924-0568.";
+  }
 
   if (!document.querySelector("#faq")) {
     const booking = document.querySelector("#book");
@@ -227,7 +234,7 @@ function buildReservationMessage(formData) {
   ].join("\n");
 }
 
-reservationForm.addEventListener("submit", (event) => {
+reservationForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const message = buildReservationMessage(formData);
@@ -236,33 +243,10 @@ reservationForm.addEventListener("submit", (event) => {
   )}&body=${encodeURIComponent(message)}`;
   const smsUrl = `sms:${reservationSms}?&body=${encodeURIComponent(message)}`;
 
-  reservationSubmit.disabled = true;
-  reservationStatus.textContent = "Sending your reservation request...";
-
-  fetch(event.currentTarget.action, {
-    method: "POST",
-    body: formData,
-  })
-    .then(async (response) => {
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(result.error || "Unable to send reservation request.");
-      }
-
-      reservationStatus.textContent =
-        "Thank you. Your request was sent to Carolina Sedan. We will follow up to confirm your ride.";
-      event.currentTarget.reset();
-    })
-    .catch(() => {
-      reservationStatus.innerHTML = `
-        We could not send automatically from this preview. Please use these backup links:
-        <a href="${emailUrl}">email request</a>
-        or
-        <a href="${smsUrl}">text request</a>.
-      `;
-    })
-    .finally(() => {
-      reservationSubmit.disabled = false;
-    });
+  window.location.href = emailUrl;
+  reservationStatus.innerHTML = `
+    Your email app should open with the reservation details. You can also
+    <a href="${smsUrl}">text this request to 919-924-0568</a>
+    or call <a href="tel:+19199240568">919-924-0568</a>.
+  `;
 });
