@@ -331,13 +331,14 @@ reservationForm.addEventListener("submit", (event) => {
         "Thank you. Your request was sent to Carolina Sedan. We will follow up to confirm your ride.";
       event.currentTarget.reset();
     })
-    .catch(() => {
+    .catch((error) => {
       reservationStatus.innerHTML = `
-        We could not send automatically yet. Please
-        <a href="${emailUrl}">email this request</a>,
+        Online sending is not connected yet. Please
+        <a href="${emailUrl}">email this request to booking@carolinasedan.com</a>,
         <a href="${smsUrl}">text it to 919-924-0568</a>,
         or call <a href="tel:+19199240568">919-924-0568</a>.
       `;
+      console.warn("Reservation submission failed", error);
     })
     .finally(() => {
       reservationSubmit.disabled = false;
