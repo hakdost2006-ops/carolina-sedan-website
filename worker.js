@@ -1,4 +1,7 @@
 const REQUIRED_FIELDS = ["name", "contact", "pickup-time", "details"];
+const DEFAULT_TO_EMAIL = "booking@carolinasedan.com";
+const DEFAULT_FROM_EMAIL = "Carolina Sedan <onboarding@resend.dev>";
+const DEFAULT_TO_PHONE = "+19199240568";
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -39,19 +42,23 @@ function buildMessage(data) {
 }
 
 async function sendEmail(env, data, message) {
-  if (!env.RESEND_API_KEY || !env.RESERVATION_TO_EMAIL || !env.RESERVATION_FROM_EMAIL) {
-    return { skipped: true, reason: "Email environment variables are not configured." };
+  const apiKey = clean(env.RESEND_API_KEY);
+  const toEmail = clean(env.RESERVATION_TO_EMAIL) || DEFAULT_TO_EMAIL;
+  const fromEmail = clean(env.RESERVATION_FROM_EMAIL) || DEFAULT_FROM_EMAIL;
+
+  if (!apiKey) {
+    return { skipped: true, reason: "RESEND_API_KEY is not configured." };
   }
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      authorization: `Bearer ${env.RESEND_API_KEY}`,
+      authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      from: env.RESERVATION_FROM_EMAIL,
-      to: [env.RESERVATION_TO_EMAIL],
+      from: fromEmail,
+      to: [toEmail],
       subject: `Reservation request from ${data.name}`,
       text: message,
       reply_to: data.contact.includes("@") ? data.contact : undefined,
@@ -63,14 +70,16 @@ async function sendEmail(env, data, message) {
 }
 
 async function sendSms(env, message) {
-  if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN || !env.TWILIO_FROM_NUMBER || !env.RESERVATION_TO_PHONE) {
+  const toPhone = clean(env.RESERVATION_TO_PHONE) || DEFAULT_TO_PHONE;
+
+  if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN || !env.TWILIO_FROM_NUMBER) {
     return { skipped: true, reason: "SMS environment variables are not configured." };
   }
 
   const credentials = btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
   const body = new URLSearchParams({
     From: env.TWILIO_FROM_NUMBER,
-    To: env.RESERVATION_TO_PHONE,
+    To: toPhone,
     Body: message.slice(0, 1500),
   });
 
@@ -115,17 +124,25 @@ async function handleReservation(request, env) {
   };
   const message = buildMessage(data);
 
-  try {
-    const [email, sms] = await Promise.all([sendEmail(env, data, message), sendSms(env, message)]);
+  const [emailResult, smsResult] = await Promise.allSettled([
+    sendEmail(env, data, message),
+    sendSms(env, message),
+  ]);
 
-    if (!email.sent && !sms.sent) {
-      return json({ error: "Reservation notifications are not configured yet." }, 503);
-    }
+  const email = emailResult.status === "fulfilled" ? emailResult.value : { error: emailResult.reason.message };
+  const sms = smsResult.status === "fulfilled" ? smsResult.value : { error: smsResult.reason.message };
+  const sent = Boolean(email.sent || sms.sent);
 
+  if (sent) {
     return json({ ok: true, email, sms });
-  } catch (error) {
-    return json({ error: error.message || "Unable to send reservation request." }, 500);
   }
+
+  const failed = Boolean(email.error || sms.error);
+  const error = failed
+    ? "Reservation notification delivery failed."
+    : "Reservation notifications are not configured yet.";
+
+  return json({ error, email, sms }, failed ? 500 : 503);
 }
 
 export default {
