@@ -104,8 +104,10 @@ const reservationEmail = "booking@carolinasedan.com";
 const reservationSms = "+19199240568";
 const reservationForm = document.querySelector("#reservation-form");
 const reservationStatus = document.querySelector("#reservation-status");
+const reservationSubmit = reservationForm.querySelector('button[type="submit"]');
 
 const newsLinks = [
+  "rdu-parking-time-tips-may-2026.html",
   "news.html#chapel-hill-attractions",
   "news.html#airport-chauffeur",
   "news.html#chapel-hill-culture",
@@ -150,18 +152,24 @@ function polishLiveContent() {
     quoteHeading.textContent = "Check a starting price before you reserve.";
   }
 
-  document.querySelectorAll(".news-card a").forEach((link, index) => {
+  const homepageNews = document.querySelector("#news");
+  homepageNews?.querySelectorAll(".news-card a").forEach((link, index) => {
     if (newsLinks[index]) {
       link.href = newsLinks[index];
     }
   });
 
-  reservationForm?.removeAttribute("action");
-  reservationForm?.removeAttribute("method");
+  reservationForm?.setAttribute("action", "/api/reservation");
+  reservationForm?.setAttribute("method", "post");
+
+  const contactInput = reservationForm?.querySelector('input[name="contact"]');
+  if (contactInput) {
+    contactInput.placeholder = "Phone number preferred; email optional";
+  }
 
   if (reservationStatus) {
     reservationStatus.textContent =
-      "Requests open as an email to booking@carolinasedan.com. You can also call or text 919-924-0568.";
+      "Requests are sent to booking@carolinasedan.com. Phone number is preferred so we can confirm quickly.";
   }
 
   if (!document.querySelector("#faq")) {
@@ -198,8 +206,9 @@ function polishLiveContent() {
   }
 
   document.querySelectorAll(".site-footer").forEach((footer) => {
-    const phone = footer.querySelector("a[href^='tel:']");
     let links = footer.querySelector(".footer-links");
+    const phone = footer.querySelector("a[href^='tel:']");
+
     if (!links) {
       links = document.createElement("div");
       links.className = "footer-links";
@@ -209,15 +218,6 @@ function polishLiveContent() {
       footer.append(links);
     }
 
-    if (!links.querySelector("a[href*='share.google']")) {
-      const google = document.createElement("a");
-      google.href = "https://share.google/Iwb4OepB3fCjH3ejG";
-      google.target = "_blank";
-      google.rel = "noopener";
-      google.textContent = "Google";
-      links.append(google);
-    }
-
     if (!links.querySelector("a[href*='facebook.com']")) {
       const facebook = document.createElement("a");
       facebook.href = "https://www.facebook.com/share/17hQheN4bK/?mibextid=wwXIfr";
@@ -225,6 +225,15 @@ function polishLiveContent() {
       facebook.rel = "noopener";
       facebook.textContent = "Facebook";
       links.append(facebook);
+    }
+
+    if (!links.querySelector("a[href*='share.google/Iwb4OepB3fCjH3ejG']")) {
+      const google = document.createElement("a");
+      google.href = "https://share.google/Iwb4OepB3fCjH3ejG";
+      google.target = "_blank";
+      google.rel = "noopener";
+      google.textContent = "Google";
+      links.prepend(google);
     }
 
     if (!links.querySelector("a[href*='x.com/carolinasedan36']")) {
@@ -275,7 +284,7 @@ function buildReservationMessage(formData) {
   ].join("\n");
 }
 
-reservationForm?.addEventListener("submit", (event) => {
+reservationForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const message = buildReservationMessage(formData);
@@ -284,10 +293,33 @@ reservationForm?.addEventListener("submit", (event) => {
   )}&body=${encodeURIComponent(message)}`;
   const smsUrl = `sms:${reservationSms}?&body=${encodeURIComponent(message)}`;
 
-  window.location.href = emailUrl;
-  reservationStatus.innerHTML = `
-    Your email app should open with the reservation details. You can also
-    <a href="${smsUrl}">text this request to 919-924-0568</a>
-    or call <a href="tel:+19199240568">919-924-0568</a>.
-  `;
+  reservationSubmit.disabled = true;
+  reservationStatus.textContent = "Sending your reservation request...";
+
+  fetch("/api/reservation", {
+    method: "POST",
+    body: formData,
+  })
+    .then(async (response) => {
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to send reservation request.");
+      }
+
+      reservationStatus.textContent =
+        "Thank you. Your request was sent to Carolina Sedan. We will follow up to confirm your ride.";
+      event.currentTarget.reset();
+    })
+    .catch(() => {
+      reservationStatus.innerHTML = `
+        We could not send automatically yet. Please
+        <a href="${emailUrl}">email this request</a>,
+        <a href="${smsUrl}">text it to 919-924-0568</a>,
+        or call <a href="tel:+19199240568">919-924-0568</a>.
+      `;
+    })
+    .finally(() => {
+      reservationSubmit.disabled = false;
+    });
 });
