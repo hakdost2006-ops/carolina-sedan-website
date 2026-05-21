@@ -153,6 +153,26 @@ function polishLiveContent() {
   }
 
   const homepageNews = document.querySelector("#news");
+  const firstNewsCard = homepageNews?.querySelector(".news-card");
+  if (firstNewsCard) {
+    const date = firstNewsCard.querySelector("span");
+    const title = firstNewsCard.querySelector("h3");
+    const copy = firstNewsCard.querySelector("p");
+
+    if (date) {
+      date.textContent = "May 21, 2026 | Memorial Day travel update";
+    }
+
+    if (title) {
+      title.textContent = "Flying out of RDU for Memorial Day weekend? Plan ahead.";
+    }
+
+    if (copy) {
+      copy.textContent =
+        "Holiday weekends can mean busier lines, fuller parking, and more traffic around RDU drop-offs and pickups.";
+    }
+  }
+
   homepageNews?.querySelectorAll(".news-card a").forEach((link, index) => {
     if (newsLinks[index]) {
       link.href = newsLinks[index];
