@@ -30,7 +30,7 @@ Optional Cloudflare variables:
 
 Email requires a Resend API key. SMS requires a Twilio phone number and approved messaging setup.
 
-Deployment trigger: 2026-05-21 15:25 EDT.
+Deployment trigger: 2026-05-22 14:46 EDT.
 
 ## Domain migration
 
