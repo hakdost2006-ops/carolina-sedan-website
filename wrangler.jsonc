@@ -3,6 +3,17 @@
   "name": "carolina-sedan-website",
   "main": "worker.js",
   "compatibility_date": "2026-05-17",
+  "keep_vars": true,
+  "routes": [
+    {
+      "pattern": "carolinasedan.com/*",
+      "zone_name": "carolinasedan.com"
+    },
+    {
+      "pattern": "www.carolinasedan.com/*",
+      "zone_name": "carolinasedan.com"
+    }
+  ],
   "assets": {
     "directory": "./",
     "binding": "ASSETS",
