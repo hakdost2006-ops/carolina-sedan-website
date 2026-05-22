@@ -306,7 +306,8 @@ function buildReservationMessage(formData) {
 
 reservationForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  const formData = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  const formData = new FormData(form);
   const message = buildReservationMessage(formData);
   const emailUrl = `mailto:${reservationEmail}?subject=${encodeURIComponent(
     "New Carolina Sedan reservation request"
@@ -339,7 +340,7 @@ reservationForm.addEventListener("submit", (event) => {
 
       reservationStatus.textContent =
         "Thank you. Your request was sent to Carolina Sedan. We will follow up to confirm your ride.";
-      event.currentTarget.reset();
+      form.reset();
     })
     .catch((error) => {
       reservationStatus.innerHTML = `
