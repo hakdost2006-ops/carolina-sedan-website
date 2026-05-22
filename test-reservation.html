@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reservation Test | Carolina Sedan</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="section booking" style="max-width: 760px; margin: 0 auto;">
+      <div>
+        <p class="eyebrow">Reservation Test</p>
+        <h1>Direct reservation test</h1>
+        <p>This page bypasses the normal cached homepage script and shows the exact server response.</p>
+      </div>
+      <form class="booking-form" id="test-form">
+        <input class="hidden-field" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
+        <label>
+          Name
+          <input type="text" name="name" value="Test Booking" required />
+        </label>
+        <label>
+          Phone or email
+          <input type="text" name="contact" value="9199240568" required />
+        </label>
+        <label>
+          Pickup date and time
+          <input type="datetime-local" name="pickup-time" required />
+        </label>
+        <label>
+          Ride details
+          <textarea name="details" rows="5" required>Testing reservation endpoint from direct test page.</textarea>
+        </label>
+        <button class="button primary full" type="submit">Send test reservation</button>
+        <pre id="result" style="white-space: pre-wrap; background: #f4f1ec; padding: 16px; border-radius: 8px; overflow:auto;"></pre>
+      </form>
+    </main>
+
+    <script>
+      const input = document.querySelector('input[name="pickup-time"]');
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      tomorrow.setHours(9, 0, 0, 0);
+      input.value = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}T09:00`;
+
+      document.querySelector("#test-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const resultBox = document.querySelector("#result");
+        resultBox.textContent = "Sending...";
+
+        try {
+          const response = await fetch(`/api/reservation?test=${Date.now()}`, {
+            method: "POST",
+            body: new FormData(event.currentTarget),
+          });
+          const text = await response.text();
+          resultBox.textContent = `HTTP ${response.status}\n\n${text}`;
+        } catch (error) {
+          resultBox.textContent = `Browser/network error:\n${error.message}`;
+        }
+      });
+    </script>
+  </body>
+</html>
