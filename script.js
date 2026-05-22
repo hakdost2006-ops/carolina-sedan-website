@@ -324,7 +324,17 @@ reservationForm.addEventListener("submit", (event) => {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(result.error || "Unable to send reservation request.");
+        const serverDetails = [
+          result.error,
+          result.email?.error,
+          result.email?.reason,
+          result.sms?.error,
+          result.sms?.reason,
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+        throw new Error(serverDetails || "Unable to send reservation request.");
       }
 
       reservationStatus.textContent =
@@ -333,7 +343,7 @@ reservationForm.addEventListener("submit", (event) => {
     })
     .catch((error) => {
       reservationStatus.innerHTML = `
-        Online sending is not connected yet. Please
+        Online sending is not connected yet. Reason: ${error.message}. Please
         <a href="${emailUrl}">email this request to booking@carolinasedan.com</a>,
         <a href="${smsUrl}">text it to 919-924-0568</a>,
         or call <a href="tel:+19199240568">919-924-0568</a>.
