@@ -41,6 +41,17 @@ function buildMessage(data) {
   ].join("\n");
 }
 
+function getReservationStatus(env) {
+  return {
+    ok: true,
+    resendKeyConnected: Boolean(clean(env.RESEND_API_KEY)),
+    toEmail: clean(env.RESERVATION_TO_EMAIL) || DEFAULT_TO_EMAIL,
+    fromEmail: clean(env.RESERVATION_FROM_EMAIL) || DEFAULT_FROM_EMAIL,
+    smsConnected: Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_FROM_NUMBER),
+    toPhone: clean(env.RESERVATION_TO_PHONE) || DEFAULT_TO_PHONE,
+  };
+}
+
 async function sendEmail(env, data, message) {
   const apiKey = clean(env.RESEND_API_KEY);
   const toEmail = clean(env.RESERVATION_TO_EMAIL) || DEFAULT_TO_EMAIL;
@@ -148,6 +159,10 @@ async function handleReservation(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/reservation-status") {
+      return json(getReservationStatus(env));
+    }
 
     if (url.pathname === "/api/reservation") {
       return handleReservation(request, env);
