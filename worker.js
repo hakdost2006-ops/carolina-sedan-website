@@ -1,6 +1,6 @@
 const REQUIRED_FIELDS = ["name", "contact", "pickup-time", "details"];
 const DEFAULT_TO_EMAIL = "booking@carolinasedan.com";
-const DEFAULT_FROM_EMAIL = "Carolina Sedan <onboarding@resend.dev>";
+const DEFAULT_FROM_EMAIL = "Carolina Sedan <booking@carolinasedan.com>";
 const DEFAULT_TO_PHONE = "+19199240568";
 
 function json(data, status = 200) {
