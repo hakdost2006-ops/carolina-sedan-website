@@ -107,6 +107,7 @@ const reservationStatus = document.querySelector("#reservation-status");
 const reservationSubmit = reservationForm.querySelector('button[type="submit"]');
 
 const newsLinks = [
+  "durham-duke-street-closure-detours-2026.html",
   "rdu-parking-time-tips-may-2026.html",
   "news.html#chapel-hill-attractions",
   "news.html#airport-chauffeur",
@@ -160,16 +161,16 @@ function polishLiveContent() {
     const copy = firstNewsCard.querySelector("p");
 
     if (date) {
-      date.textContent = "May 21, 2026 | Memorial Day travel update";
+      date.textContent = "May 24, 2026 | Durham travel alert";
     }
 
     if (title) {
-      title.textContent = "Flying out of RDU for Memorial Day weekend? Plan ahead.";
+      title.textContent = "Durham Alert: Duke Street Closure (Trinity Ave-Monmouth Ave)";
     }
 
     if (copy) {
       copy.textContent =
-        "Holiday weekends can mean busier lines, fuller parking, and more traffic around RDU drop-offs and pickups.";
+        "Late-May closure and detours via Washington Street or Buchanan Boulevard may affect downtown, Duke, medical, and RDU trips.";
     }
   }
 
