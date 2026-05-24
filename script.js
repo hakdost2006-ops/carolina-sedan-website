@@ -143,6 +143,24 @@ function polishLiveContent() {
     newsHeading.textContent = "Helpful Chapel Hill travel articles for planning local rides.";
   }
 
+  const newsSection = document.querySelector("#news");
+  const newsSectionHeading = newsSection?.querySelector(".section-heading");
+  const newsGrid = newsSection?.querySelector(".news-grid");
+
+  if (newsSection && newsSectionHeading && newsGrid && !newsSection.querySelector(".news-lead")) {
+    const lead = document.createElement("div");
+    lead.className = "news-lead";
+    newsSection.insertBefore(lead, newsGrid);
+    lead.append(newsSectionHeading);
+
+    const figure = document.createElement("figure");
+    figure.className = "news-photo";
+    figure.innerHTML = `
+      <img src="assets/airport-service.png" alt="Carolina Sedan scheduled airport and local transportation" />
+    `;
+    lead.append(figure);
+  }
+
   const quoteEyebrow = document.querySelector(".estimator .eyebrow");
   if (quoteEyebrow) {
     quoteEyebrow.textContent = "Quick Estimate";
@@ -273,8 +291,12 @@ function polishLiveContent() {
     .faq-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:28px}
     .faq-grid article{padding:24px;border:1px solid var(--line);border-radius:8px;background:var(--white)}
     .faq-grid p{color:var(--muted)}
+    .news-lead{display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(28px,6vw,70px);align-items:center}
+    .news-photo{margin:0;overflow:hidden;border-radius:8px;box-shadow:0 18px 52px rgba(0,0,0,.28)}
+    .news-photo img{display:block;width:100%;aspect-ratio:1.55/1;object-fit:cover}
+    .news-lead+.news-grid{margin-top:44px}
     .footer-links{display:flex;flex-wrap:wrap;gap:16px}
-    @media(max-width:860px){.faq-grid{grid-template-columns:1fr}}
+    @media(max-width:860px){.faq-grid,.news-lead{grid-template-columns:1fr}}
   `;
   document.head.append(style);
 }
