@@ -3,6 +3,17 @@ const DEFAULT_TO_EMAIL = "booking@carolinasedan.com";
 const DEFAULT_FROM_EMAIL = "Carolina Sedan <booking@carolinasedan.com>";
 const DEFAULT_TO_PHONE = "+19199240568";
 
+const HOSTED_IMAGES = {
+  "/assets/carolina-sedan-logo.jpeg":
+    "https://static.wixstatic.com/media/227b82_7387b084eac248a08f01c9856a4d3ab1~mv2.jpeg/v1/fill/w_246,h_197,al_c,q_90,enc_auto/Carolina%20S%20logo.jpeg",
+  "/assets/carolina-lexus.jpeg":
+    "https://static.wixstatic.com/media/227b82_f254873438d6493fb0d312c202b41649~mv2.jpeg/v1/fill/w_794,h_794,al_c,q_90,enc_auto/Caolina%20Lexus.jpeg",
+  "/assets/chauffeur-hero.jpg":
+    "https://static.wixstatic.com/media/ea26fd_b01c89023bd4439a87f0498ddb39dabb~mv2_d_3840_2200_s_2.jpg/v1/fill/w_1600,h_920,al_c,q_90,enc_auto/hero.jpg",
+  "/assets/airport-service.png":
+    "https://static.wixstatic.com/media/ea26fd_b01c89023bd4439a87f0498ddb39dabb~mv2_d_3840_2200_s_2.jpg/v1/fill/w_1600,h_920,al_c,q_90,enc_auto/hero.jpg",
+};
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -50,6 +61,25 @@ function getReservationStatus(env) {
     smsConnected: Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_FROM_NUMBER),
     toPhone: clean(env.RESERVATION_TO_PHONE) || DEFAULT_TO_PHONE,
   };
+}
+
+async function serveHostedImage(pathname) {
+  const imageUrl = HOSTED_IMAGES[pathname];
+  if (!imageUrl) return null;
+
+  const imageResponse = await fetch(imageUrl, {
+    cf: { cacheEverything: true, cacheTtl: 31536000 },
+  });
+
+  const headers = new Headers(imageResponse.headers);
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  headers.set("x-content-type-options", "nosniff");
+
+  return new Response(imageResponse.body, {
+    status: imageResponse.status,
+    statusText: imageResponse.statusText,
+    headers,
+  });
 }
 
 async function sendEmail(env, data, message) {
@@ -159,6 +189,11 @@ async function handleReservation(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    const hostedImage = await serveHostedImage(url.pathname);
+    if (hostedImage) {
+      return hostedImage;
+    }
 
     if (url.pathname === "/api/reservation-status") {
       return json(getReservationStatus(env));
