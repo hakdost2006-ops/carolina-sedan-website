@@ -107,6 +107,7 @@ const reservationStatus = document.querySelector("#reservation-status");
 const reservationSubmit = reservationForm.querySelector('button[type="submit"]');
 
 const newsLinks = [
+  "unc-health-championship-raleigh-ride-tips-2026.html",
   "durham-duke-street-closure-detours-2026.html",
   "rdu-parking-time-tips-may-2026.html",
   "news.html#chapel-hill-attractions",
@@ -179,16 +180,16 @@ function polishLiveContent() {
     const copy = firstNewsCard.querySelector("p");
 
     if (date) {
-      date.textContent = "May 24, 2026 | Durham travel alert";
+      date.textContent = "May 27, 2026 | Raleigh event travel";
     }
 
     if (title) {
-      title.textContent = "Durham Alert: Duke Street Closure (Trinity Ave-Monmouth Ave)";
+      title.textContent = "UNC Health Championship Weekend: Simple Ride Tips for Raleigh + RDU Travelers";
     }
 
     if (copy) {
       copy.textContent =
-        "Late-May closure and detours via Washington Street or Buchanan Boulevard may affect downtown, Duke, medical, and RDU trips.";
+        "Heading to Raleigh Country Club May 28-31? Plan ahead for tournament traffic, downtown plans, weather, and RDU flights.";
     }
   }
 
