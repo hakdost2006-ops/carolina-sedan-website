@@ -36,6 +36,9 @@ const routeContent = {
     "Travel between Durham and Chapel Hill with a scheduled driver for medical visits, university travel, meetings, and events.",
 };
 
+const reliableRouteImage =
+  "https://static.wixstatic.com/media/ea26fd_b01c89023bd4439a87f0498ddb39dabb~mv2_d_3840_2200_s_2.jpg/v1/fill/w_1600,h_920,al_c,q_90,enc_auto/hero.jpg";
+
 const serviceCards = document.querySelectorAll(".service-card");
 const serviceDetail = document.querySelector("#service-detail");
 
@@ -124,6 +127,12 @@ const newsLinks = [
 ];
 
 function polishLiveContent() {
+  document
+    .querySelectorAll('img[src="assets/airport-service.png"], img[src$="/assets/airport-service.png"]')
+    .forEach((image) => {
+      image.src = reliableRouteImage;
+    });
+
   const heroButton = document.querySelector(".hero .button.primary");
   if (heroButton) {
     heroButton.textContent = "Book RDU Airport Ride";
@@ -157,7 +166,7 @@ function polishLiveContent() {
     const figure = document.createElement("figure");
     figure.className = "news-photo";
     figure.innerHTML = `
-      <img src="assets/airport-service.png" alt="Carolina Sedan scheduled airport and local transportation" />
+      <img src="${reliableRouteImage}" alt="Carolina Sedan scheduled airport and local transportation" />
     `;
     lead.append(figure);
   }
