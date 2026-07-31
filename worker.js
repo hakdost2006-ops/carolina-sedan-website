@@ -1,7 +1,8 @@
-const REQUIRED_FIELDS = ["name", "contact", "pickup-time", "details"];
+const REQUIRED_FIELDS = ["name", "phone", "pickup-time", "pickup-address", "destination-address"];
 const DEFAULT_TO_EMAIL = "booking@carolinasedan.com";
 const DEFAULT_FROM_EMAIL = "Carolina Sedan <booking@carolinasedan.com>";
 const DEFAULT_TO_PHONE = "+19199240568";
+const RESERVATION_PREFIX = "CSS";
 
 const HOSTED_IMAGES = {
   "/assets/carolina-sedan-logo.jpeg":
@@ -25,6 +26,11 @@ function clean(value) {
   return String(value || "").trim();
 }
 
+function getOrigin(request) {
+  const url = new URL(request.url);
+  return `${url.protocol}//${url.host}`;
+}
+
 function formatPickupTime(value) {
   if (!value) return "Not provided";
   const date = new Date(value);
@@ -37,16 +43,65 @@ function formatPickupTime(value) {
   }).format(date);
 }
 
+function makeReservationId(now = new Date()) {
+  const date = now.toISOString().slice(0, 10).replaceAll("-", "");
+  const random = crypto.randomUUID().replaceAll("-", "").slice(0, 6).toUpperCase();
+  return `${RESERVATION_PREFIX}-${date}-${random}`;
+}
+
+function getTrackingUrl(request, reservationId) {
+  return `${getOrigin(request)}/reservation.html?id=${encodeURIComponent(reservationId)}`;
+}
+
+function buildReservation(formData, request) {
+  const id = makeReservationId();
+  const pickupTime = clean(formData.get("pickup-time"));
+  const legacyContact = clean(formData.get("contact"));
+  const phone = clean(formData.get("phone")) || legacyContact;
+  const email = clean(formData.get("email")) || (legacyContact.includes("@") ? legacyContact : "");
+
+  return {
+    id,
+    status: "pending-confirmation",
+    paymentStatus: "not-requested",
+    createdAt: new Date().toISOString(),
+    trackingUrl: getTrackingUrl(request, id),
+    name: clean(formData.get("name")),
+    phone,
+    email,
+    contact: [phone, email].filter(Boolean).join(" | "),
+    rideType: clean(formData.get("ride-type")) || "Reservation request",
+    pickupTime,
+    pickupTimeLabel: formatPickupTime(pickupTime),
+    pickupAddress: clean(formData.get("pickup-address")),
+    destinationAddress: clean(formData.get("destination-address")),
+    passengers: clean(formData.get("passengers")) || "1",
+    luggage: clean(formData.get("luggage")),
+    flightNumber: clean(formData.get("flight-number")),
+    details: clean(formData.get("details")),
+  };
+}
+
 function buildMessage(data) {
   return [
     "New Carolina Sedan reservation request",
     "",
-    `Name: ${data.name}`,
-    `Phone or email: ${data.contact}`,
-    `Pickup date/time: ${formatPickupTime(data.pickupTime)}`,
+    `Reservation ID: ${data.id}`,
+    `Status link: ${data.trackingUrl}`,
     "",
-    "Ride details:",
-    data.details,
+    `Name: ${data.name}`,
+    `Phone: ${data.phone || "Not provided"}`,
+    `Email: ${data.email || "Not provided"}`,
+    `Ride type: ${data.rideType}`,
+    `Pickup date/time: ${data.pickupTimeLabel}`,
+    `Pickup: ${data.pickupAddress}`,
+    `Destination: ${data.destinationAddress}`,
+    `Passengers: ${data.passengers}`,
+    `Luggage: ${data.luggage || "Not provided"}`,
+    `Flight: ${data.flightNumber || "Not provided"}`,
+    "",
+    "Notes:",
+    data.details || "None",
     "",
     `Submitted: ${new Date().toISOString()}`,
   ].join("\n");
@@ -60,6 +115,7 @@ function getReservationStatus(env) {
     fromEmail: clean(env.RESERVATION_FROM_EMAIL) || DEFAULT_FROM_EMAIL,
     smsConnected: Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_FROM_NUMBER),
     toPhone: clean(env.RESERVATION_TO_PHONE) || DEFAULT_TO_PHONE,
+    storageConnected: Boolean(env.RESERVATIONS),
   };
 }
 
@@ -100,9 +156,9 @@ async function sendEmail(env, data, message) {
     body: JSON.stringify({
       from: fromEmail,
       to: [toEmail],
-      subject: `Reservation request from ${data.name}`,
+      subject: `${data.id} | Reservation request from ${data.name}`,
       text: message,
-      reply_to: data.contact.includes("@") ? data.contact : undefined,
+      reply_to: data.email || undefined,
     }),
   });
 
@@ -140,9 +196,53 @@ async function sendSms(env, message) {
   return { sent: true };
 }
 
+async function saveReservation(env, reservation) {
+  if (!env.RESERVATIONS) {
+    return { skipped: true, reason: "RESERVATIONS KV binding is not configured." };
+  }
+
+  await env.RESERVATIONS.put(`reservation:${reservation.id}`, JSON.stringify(reservation), {
+    expirationTtl: 60 * 60 * 24 * 180,
+  });
+
+  return { saved: true };
+}
+
+async function getReservation(request, env) {
+  const url = new URL(request.url);
+  const id = clean(url.searchParams.get("id")).toUpperCase();
+
+  if (!id) {
+    return json({ error: "Reservation number is required." }, 400);
+  }
+
+  if (!env.RESERVATIONS) {
+    return json(
+      {
+        error:
+          "Reservation tracking storage is not connected yet. Please call or text Carolina Sedan to confirm status.",
+        storageConnected: false,
+      },
+      503
+    );
+  }
+
+  const reservation = await env.RESERVATIONS.get(`reservation:${id}`, "json");
+
+  if (!reservation) {
+    return json({ error: "Reservation was not found." }, 404);
+  }
+
+  return json({ ok: true, reservation, storageConnected: true });
+}
+
 async function handleReservation(request, env) {
+  if (request.method === "GET") {
+    return getReservation(request, env);
+  }
+
   if (request.method !== "POST") {
-    return json({ error: "Use POST to submit a reservation request." }, 405);
+    return json({ error: "Use POST to submit a reservation request or GET to check reservation status." }, 405);
   }
 
   let formData;
@@ -157,25 +257,31 @@ async function handleReservation(request, env) {
   const missing = REQUIRED_FIELDS.filter((field) => !clean(formData.get(field)));
   if (missing.length > 0) return json({ error: "Please complete all required fields." }, 400);
 
-  const data = {
-    name: clean(formData.get("name")),
-    contact: clean(formData.get("contact")),
-    pickupTime: clean(formData.get("pickup-time")),
-    details: clean(formData.get("details")),
-  };
+  const data = buildReservation(formData, request);
   const message = buildMessage(data);
 
-  const [emailResult, smsResult] = await Promise.allSettled([
+  const [storageResult, emailResult, smsResult] = await Promise.allSettled([
+    saveReservation(env, data),
     sendEmail(env, data, message),
     sendSms(env, message),
   ]);
 
+  const storage =
+    storageResult.status === "fulfilled" ? storageResult.value : { error: storageResult.reason.message };
   const email = emailResult.status === "fulfilled" ? emailResult.value : { error: emailResult.reason.message };
   const sms = smsResult.status === "fulfilled" ? smsResult.value : { error: smsResult.reason.message };
   const sent = Boolean(email.sent || sms.sent);
 
   if (sent) {
-    return json({ ok: true, email, sms });
+    return json({
+      ok: true,
+      reservationId: data.id,
+      statusUrl: data.trackingUrl,
+      storageConnected: Boolean(storage.saved),
+      storage,
+      email,
+      sms,
+    });
   }
 
   const failed = Boolean(email.error || sms.error);
