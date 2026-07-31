@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reservation Status | Carolina Sedan Service</title>
+    <meta name="description" content="Check the status of a Carolina Sedan Service reservation request." />
+    <meta name="robots" content="noindex" />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .status-card{align-self:start}.status-search{display:grid;gap:16px}.reservation-result{display:grid;gap:14px;padding-top:6px;color:var(--muted)}.reservation-detail h2{margin-bottom:16px;color:var(--forest);font-size:clamp(1.8rem,3.4vw,3rem)}.reservation-detail dl{display:grid;gap:10px;margin:0 0 18px}.reservation-detail dl div{display:grid;grid-template-columns:130px 1fr;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}.reservation-detail dt{color:var(--muted);font-weight:800}.reservation-detail dd{margin:0;color:var(--ink)}@media(max-width:560px){.reservation-detail dl div{grid-template-columns:1fr;gap:4px}}
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="index.html#top" aria-label="Carolina Sedan Service home">
+        <img class="brand-logo" src="assets/carolina-sedan-logo.jpeg" alt="" />
+        <span>
+          <strong>Carolina Sedan</strong>
+          <small>Chapel Hill car service</small>
+        </span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="index.html#services">Services</a>
+        <a href="about.html">About</a>
+        <a href="index.html#fleet">Fleet</a>
+        <a href="news.html">News</a>
+        <a href="index.html#book">Book</a>
+      </nav>
+      <a class="header-call" href="tel:+19199240568">Call 24/7</a>
+    </header>
+
+    <main>
+      <section class="about-hero">
+        <div class="about-hero-copy">
+          <p class="eyebrow">Reservation Status</p>
+          <h1>Track your Carolina Sedan request.</h1>
+          <p>
+            Enter or open your reservation request number to see the current status.
+            Final price and driver assignment are confirmed directly by Carolina Sedan.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="index.html#book">New reservation</a>
+            <a class="button quiet" href="tel:+19199240568">Call 919-924-0568</a>
+          </div>
+        </div>
+        <div class="estimate-card status-card">
+          <form id="status-form" class="status-search">
+            <label>
+              Reservation number
+              <input id="reservation-id" name="id" type="text" placeholder="Example: CSS-20260731-ABC123" required />
+            </label>
+            <button class="button primary full" type="submit">Check status</button>
+          </form>
+          <div id="status-result" class="reservation-result" aria-live="polite">
+            Enter your reservation number to check status.
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Carolina Sedan Service | Chapel Hill black car and airport transfer service</p>
+      <div class="footer-links">
+        <a href="tel:+19199240568">919-924-0568</a>
+        <a href="https://share.google/Iwb4OepB3fCjH3ejG" target="_blank" rel="noopener">Google</a>
+        <a href="https://www.facebook.com/share/17hQheN4bK/?mibextid=wwXIfr" target="_blank" rel="noopener">Facebook</a>
+        <a href="https://x.com/carolinasedan36?s=21&amp;t=4jFG8iXkR-U6dBxISFHjPA" target="_blank" rel="noopener">X</a>
+      </div>
+    </footer>
+
+    <script>
+      const form = document.querySelector("#status-form");
+      const idInput = document.querySelector("#reservation-id");
+      const result = document.querySelector("#status-result");
+      const params = new URLSearchParams(window.location.search);
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function formatStatus(status) {
+        return String(status || "pending-confirmation")
+          .replaceAll("-", " ")
+          .replace(/\b\w/g, (letter) => letter.toUpperCase());
+      }
+
+      function renderReservation(reservation) {
+        result.innerHTML = `
+          <div class="reservation-detail">
+            <p class="eyebrow">Current Status</p>
+            <h2>${formatStatus(reservation.status)}</h2>
+            <dl>
+              <div><dt>Reservation</dt><dd>${escapeHtml(reservation.id)}</dd></div>
+              <div><dt>Name</dt><dd>${escapeHtml(reservation.name)}</dd></div>
+              <div><dt>Ride type</dt><dd>${escapeHtml(reservation.rideType)}</dd></div>
+              <div><dt>Pickup time</dt><dd>${escapeHtml(reservation.pickupTimeLabel)}</dd></div>
+              <div><dt>Pickup</dt><dd>${escapeHtml(reservation.pickupAddress)}</dd></div>
+              <div><dt>Destination</dt><dd>${escapeHtml(reservation.destinationAddress)}</dd></div>
+              <div><dt>Passengers</dt><dd>${escapeHtml(reservation.passengers)}</dd></div>
+              <div><dt>Payment</dt><dd>${formatStatus(reservation.paymentStatus || "not requested")}</dd></div>
+            </dl>
+            <p class="form-note">Need to change something? Call or text <a href="tel:+19199240568">919-924-0568</a>.</p>
+          </div>
+        `;
+      }
+
+      async function loadReservation(id) {
+        const reservationId = String(id || "").trim();
+        if (!reservationId) return;
+
+        idInput.value = reservationId;
+        result.textContent = "Checking reservation status...";
+
+        try {
+          const response = await fetch(`/api/reservation?id=${encodeURIComponent(reservationId)}`);
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || "Reservation was not found.");
+          renderReservation(data.reservation);
+        } catch (error) {
+          result.innerHTML = `
+            <strong>Status is not available yet.</strong>
+            <p>${escapeHtml(error.message)}</p>
+            <p class="form-note">Please call or text <a href="tel:+19199240568">919-924-0568</a> and include reservation number ${escapeHtml(reservationId)}.</p>
+          `;
+        }
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const id = idInput.value.trim();
+        history.replaceState(null, "", `reservation.html?id=${encodeURIComponent(id)}`);
+        loadReservation(id);
+      });
+
+      loadReservation(params.get("id"));
+    </script>
+  </body>
+</html>
