@@ -43,3 +43,5 @@ Optional Cloudflare KV binding:
 Without the `RESERVATIONS` KV binding, email notifications can still work, but the status page cannot retrieve saved ride details. Add the KV namespace in Cloudflare Worker settings, bind it as `RESERVATIONS`, then redeploy.
 
 Payment collection is not part of Stage 1. Add Stripe in Stage 2 after the reservation request and tracking flow is stable.
+
+Deployment trigger: 2026-07-31 after Cloudflare Git reconnect.
