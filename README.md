@@ -1,15 +1,16 @@
 # Carolina Sedan Service Website
 
-Static website for Carolina Sedan Service, prepared for Cloudflare Pages.
+Static website for Carolina Sedan Service, prepared for Cloudflare Pages and Cloudflare Workers.
 
-## Cloudflare Pages setup
+## Cloudflare setup
 
-Use these settings when creating the Cloudflare Pages project:
+Use these settings when creating or reviewing the Cloudflare project:
 
 - Framework preset: `None`
 - Build command: leave blank
 - Build output directory: `/`
 - Root directory: `/`
+- Worker deploy command: `npx wrangler deploy`
 
 ## Reservation form
 
@@ -21,7 +22,7 @@ Required Cloudflare secret:
 
 Optional Cloudflare variables:
 
-- `RESERVATION_FROM_EMAIL`
+- `RESERVATION_FROM_EMAIL=Carolina Sedan <booking@carolinasedan.com>`
 - `RESERVATION_TO_EMAIL=booking@carolinasedan.com`
 - `RESERVATION_TO_PHONE=+19199240568`
 - `TWILIO_ACCOUNT_SID`
@@ -30,18 +31,15 @@ Optional Cloudflare variables:
 
 Email requires a Resend API key. SMS requires a Twilio phone number and approved messaging setup.
 
-Deployment trigger: 2026-05-22 14:46 EDT.
+### Stage 1 reservation engine
 
-## Domain migration
+The homepage form collects ride type, phone, email, pickup time, pickup address, destination, passengers, luggage, flight number, and notes. The Worker generates a reservation request number such as `CSS-20260731-ABC123` and includes a private status link in the email notification.
 
-Do not update DNS until the Cloudflare preview URL works.
+Optional Cloudflare KV binding:
 
-Recommended launch order:
+- Binding name: `RESERVATIONS`
+- Purpose: store reservation request details so `/reservation.html?id=...` can show the customer status page.
 
-1. Push this folder to GitHub.
-2. Connect the GitHub repo to Cloudflare.
-3. Confirm the preview site loads correctly.
-4. Configure the reservation environment variables.
-5. Test a reservation submission.
-6. Add `www.carolinasedan.com` as a custom domain.
-7. Update DNS only after the preview and form are confirmed.
+Without the `RESERVATIONS` KV binding, email notifications can still work, but the status page cannot retrieve saved ride details. Add the KV namespace in Cloudflare Worker settings, bind it as `RESERVATIONS`, then redeploy.
+
+Payment collection is not part of Stage 1. Add Stripe in Stage 2 after the reservation request and tracking flow is stable.
