@@ -33,6 +33,22 @@ function getOrigin(request) {
 
 function formatPickupTime(value) {
   if (!value) return "Not provided";
+
+  const localDateTime = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (localDateTime) {
+    const [, year, month, day, hourValue, minute] = localDateTime;
+    const hour = Number(hourValue);
+    const hour12 = hour % 12 || 12;
+    const period = hour >= 12 ? "PM" : "AM";
+    const date = new Date(`${year}-${month}-${day}T12:00:00Z`);
+    const dateLabel = new Intl.DateTimeFormat("en-US", {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    }).format(date);
+
+    return `${dateLabel}, ${hour12}:${minute} ${period}`;
+  }
+
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
 
