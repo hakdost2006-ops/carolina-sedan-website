@@ -72,7 +72,7 @@
   <body>
     <header class="site-header">
       <a class="brand" href="#top" aria-label="Carolina Sedan Service home">
-        <img class="brand-logo" src="assets/carolina-sedan-logo.jpeg" alt="" />
+        <img class="brand-logo" src="https://static.wixstatic.com/media/227b82_7387b084eac248a08f01c9856a4d3ab1~mv2.jpeg/v1/fill/w_246,h_197,al_c,q_90,enc_auto/Carolina%20S%20logo.jpeg" alt="" />
         <span>
           <strong>Carolina Sedan</strong>
           <small>Chapel Hill car service</small>
@@ -138,7 +138,7 @@
           <p class="eyebrow">Compete where ride apps are weak</p>
           <h2>Sell certainty, not just transportation.</h2>
           <figure class="car-portrait">
-            <img src="assets/carolina-lexus.jpeg" alt="Carolina Sedan black Lexus vehicle" />
+            <img src="https://static.wixstatic.com/media/227b82_f254873438d6493fb0d312c202b41649~mv2.jpeg/v1/fill/w_794,h_794,al_c,q_90,enc_auto/Caolina%20Lexus.jpeg" alt="Carolina Sedan black Lexus vehicle" />
           </figure>
         </div>
         <div class="difference-list">
@@ -250,7 +250,7 @@
           <h2 id="routes-title">Reserve reliable transportation on the routes local travelers use most.</h2>
         </div>
         <figure class="route-photo">
-          <img src="assets/airport-service.png" alt="Professional sedan service for airport and local transportation" />
+          <img src="https://static.wixstatic.com/media/ea26fd_b01c89023bd4439a87f0498ddb39dabb~mv2_d_3840_2200_s_2.jpg/v1/fill/w_1600,h_920,al_c,q_90,enc_auto/hero.jpg" alt="Professional sedan service for airport and local transportation" />
         </figure>
         <div class="route-tabs" role="tablist" aria-label="Popular local routes">
           <button class="route-tab active" data-route="Chapel Hill to RDU" type="button">Chapel Hill to RDU</button>
@@ -351,10 +351,28 @@
             </p>
           </div>
           <figure class="news-photo">
-            <img src="assets/airport-service.png" alt="Carolina Sedan scheduled airport and local transportation" />
+            <img src="https://static.wixstatic.com/media/ea26fd_b01c89023bd4439a87f0498ddb39dabb~mv2_d_3840_2200_s_2.jpg/v1/fill/w_1600,h_920,al_c,q_90,enc_auto/hero.jpg" alt="Carolina Sedan scheduled airport and local transportation" />
           </figure>
         </div>
         <div class="news-grid">
+          <article class="news-card">
+            <span>July 27-August 2, 2026 | Google & Facebook travel advisory</span>
+            <h3>Triangle Travel Advisory: Smart planning for summer rides, heat, storms, and RDU trips</h3>
+            <p>From Carolina Sedan's Google and Facebook updates: summer travel is busy, storms can slow Triangle routes, and airport riders should build in a buffer.</p>
+            <a href="triangle-travel-advisory-july-27-august-2-2026.html">Read the advisory</a>
+          </article>
+          <article class="news-card">
+            <span>May 30, 2026 | Chapel Hill travel</span>
+            <h3>Chapel Hill Regional Weekend (May 30-31): Traffic, Parking, and Ride Planning Tips</h3>
+            <p>Expect heavier traffic and tighter parking near UNC. Simple arrival planning and a drop-off option to skip the parking hunt.</p>
+            <a href="chapel-hill-regional-weekend-ride-tips-2026.html">Read the tips</a>
+          </article>
+          <article class="news-card">
+            <span>May 27, 2026 | Raleigh event travel</span>
+            <h3>UNC Health Championship Weekend: Simple Ride Tips for Raleigh + RDU Travelers</h3>
+            <p>Heading to Raleigh Country Club May 28-31? Plan ahead for tournament traffic, downtown plans, weather, and RDU flights.</p>
+            <a href="unc-health-championship-raleigh-ride-tips-2026.html">Read the tips</a>
+          </article>
           <article class="news-card">
             <span>May 24, 2026 | Durham travel alert</span>
             <h3>Durham Alert: Duke Street Closure (Trinity Ave-Monmouth Ave)</h3>
@@ -554,27 +572,65 @@
             <span>522 Colony Woods Dr, Chapel Hill, NC 27517</span>
           </div>
         </div>
-        <form class="booking-form" id="reservation-form">
+        <form class="booking-form reservation-engine-form" id="reservation-form">
           <input class="hidden-field" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
+          <div class="form-grid">
+            <label>
+              Name
+              <input type="text" name="name" autocomplete="name" placeholder="Your name" required />
+            </label>
+            <label>
+              Phone
+              <input type="tel" name="phone" autocomplete="tel" placeholder="Best phone number" required />
+            </label>
+            <label>
+              Email
+              <input type="email" name="email" autocomplete="email" placeholder="Email for confirmation" />
+            </label>
+            <label>
+              Ride type
+              <select name="ride-type" required>
+                <option value="RDU airport transfer">RDU airport transfer</option>
+                <option value="Local point-to-point">Local point-to-point</option>
+                <option value="Medical appointment">Medical appointment</option>
+                <option value="UNC or Duke travel">UNC or Duke travel</option>
+                <option value="Corporate or event">Corporate or event</option>
+                <option value="Hourly service">Hourly service</option>
+              </select>
+            </label>
+            <label>
+              Pickup date and time
+              <input type="datetime-local" name="pickup-time" required />
+            </label>
+            <label>
+              Passengers
+              <input type="number" name="passengers" min="1" max="14" value="1" required />
+            </label>
+            <label class="wide">
+              Pickup address
+              <input type="text" name="pickup-address" autocomplete="street-address" placeholder="Street, hotel, campus building, airport terminal" required />
+            </label>
+            <label class="wide">
+              Destination
+              <input type="text" name="destination-address" placeholder="Where are you going?" required />
+            </label>
+            <label>
+              Luggage
+              <input type="text" name="luggage" placeholder="Example: 2 checked bags" />
+            </label>
+            <label>
+              Flight number
+              <input type="text" name="flight-number" placeholder="Optional" />
+            </label>
+          </div>
           <label>
-            Name
-            <input type="text" name="name" autocomplete="name" placeholder="Your name" required />
+            Notes
+            <textarea name="details" rows="5" placeholder="Car seat, extra stops, exact entrance, accessibility needs, or anything else we should know"></textarea>
           </label>
-          <label>
-            Phone or email
-            <input type="text" name="contact" autocomplete="email" placeholder="Best way to reach you" required />
-          </label>
-          <label>
-            Pickup date and time
-            <input type="datetime-local" name="pickup-time" required />
-          </label>
-          <label>
-            Ride details
-            <textarea name="details" rows="5" placeholder="Pickup, destination, flight number, passengers, luggage, special notes" required></textarea>
-          </label>
+          <div class="reservation-summary" id="reservation-summary" hidden></div>
           <button class="button primary full" type="submit">Request reservation</button>
           <p class="form-note" id="reservation-status">
-            Requests open as an email to booking@carolinasedan.com. You can also call or text 919-924-0568.
+            Requests are sent to booking@carolinasedan.com. Phone number is preferred so we can confirm quickly.
           </p>
         </form>
       </section>
