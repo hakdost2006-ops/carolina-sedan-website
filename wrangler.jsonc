@@ -14,6 +14,12 @@
       "zone_name": "carolinasedan.com"
     }
   ],
+  "kv_namespaces": [
+    {
+      "binding": "RESERVATIONS",
+      "id": "f45a1611b83e43ab9600da9d7b3ac98a"
+    }
+  ],
   "assets": {
     "directory": "./",
     "binding": "ASSETS",
