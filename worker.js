@@ -3,6 +3,8 @@ const DEFAULT_TO_EMAIL = "booking@carolinasedan.com";
 const DEFAULT_FROM_EMAIL = "Carolina Sedan <booking@carolinasedan.com>";
 const DEFAULT_TO_PHONE = "+19199240568";
 const RESERVATION_PREFIX = "CSS";
+const CANONICAL_HOST = "www.carolinasedan.com";
+const CANONICAL_ORIGIN = `https://${CANONICAL_HOST}`;
 
 const HOSTED_IMAGES = {
   "/assets/carolina-sedan-logo.jpeg":
@@ -15,6 +17,59 @@ const HOSTED_IMAGES = {
     "https://static.wixstatic.com/media/ea26fd_b01c89023bd4439a87f0498ddb39dabb~mv2_d_3840_2200_s_2.jpg/v1/fill/w_1600,h_920,al_c,q_90,enc_auto/hero.jpg",
 };
 
+const LEGACY_REDIRECTS = {
+  "/blog": "/news",
+  "/post/exploring-the-best-restaurants-in-chapel-hill-and-carrboro-with-carolina-sedan-service":
+    "/news#restaurants",
+  "/post/discover-carolina-sedan-services-top-10-chapel-hill-carrboro-attractions":
+    "/news#chapel-hill-attractions",
+  "/post/the-advantages-of-choosing-a-professional-chauffeur-for-your-airport-transfers-with-carolina-sedan":
+    "/rdu-airport-transportation-chapel-hill",
+  "/post/discovering-the-history-and-culture-of-chapel-hill-and-carrboro-with-carolina-sedan-service":
+    "/news#chapel-hill-culture",
+  "/post/why-carolina-sedan-service-is-the-best-choice-for-your-next-special-event":
+    "/event-transportation-triangle",
+};
+
+const PAGE_ROUTES = {
+  "/": "/index.html",
+  "/about": "/about.html",
+  "/ai-summary": "/ai-summary.html",
+  "/chapel-hill-regional-weekend-ride-tips-2026": "/chapel-hill-regional-weekend-ride-tips-2026.html",
+  "/chapel-hill-carrboro-dex-fest-travel-update-2026":
+    "/chapel-hill-carrboro-dex-fest-travel-update-2026.html",
+  "/durham-duke-street-closure-detours-2026": "/durham-duke-street-closure-detours-2026.html",
+  "/event-transportation-triangle": "/event-transportation-triangle.html",
+  "/hotel-rdu-transportation": "/hotel-rdu-transportation.html",
+  "/july-4th-week-travel-advisory-2026": "/july-4th-week-travel-advisory-2026.html",
+  "/juneteenth-fathers-day-weekend-travel-notes-2026":
+    "/juneteenth-fathers-day-weekend-travel-notes-2026.html",
+  "/medical-appointment-rides": "/medical-appointment-rides.html",
+  "/news": "/news.html",
+  "/rdu-airport-transportation-chapel-hill": "/rdu-airport-transportation-chapel-hill.html",
+  "/rdu-parking-time-tips-may-2026": "/rdu-parking-time-tips-may-2026.html",
+  "/reservation": "/reservation.html",
+  "/triangle-travel-advisory-july-14-19-2026": "/triangle-travel-advisory-july-14-19-2026.html",
+  "/triangle-travel-advisory-july-27-august-2-2026":
+    "/triangle-travel-advisory-july-27-august-2-2026.html",
+  "/triangle-travel-update-rdu-terminal-2-raleigh-roadwork-durham-detour-may-2026":
+    "/triangle-travel-update-rdu-terminal-2-raleigh-roadwork-durham-detour-may-2026.html",
+  "/unc-baseball-super-regional-weekend-travel-2026": "/unc-baseball-super-regional-weekend-travel-2026.html",
+  "/unc-department-transportation": "/unc-department-transportation.html",
+  "/unc-health-championship-raleigh-ride-tips-2026": "/unc-health-championship-raleigh-ride-tips-2026.html",
+};
+
+const STATIC_FILES = new Set([
+  "/_headers",
+  "/_redirects",
+  "/robots.txt",
+  "/llms.txt",
+  "/sitemap.xml",
+  "/script.js",
+  "/styles.css",
+  "/team.css",
+]);
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -22,13 +77,29 @@ function json(data, status = 200) {
   });
 }
 
+function redirect(location, status = 301) {
+  return new Response(null, {
+    status,
+    headers: { location },
+  });
+}
+
+function notFound() {
+  return new Response(
+    `<!doctype html><html lang="en"><head><meta charset="utf-8" /><meta name="robots" content="noindex" /><title>Page Not Found | Carolina Sedan</title><link rel="stylesheet" href="/styles.css" /></head><body><main class="section"><p class="eyebrow">Page Not Found</p><h1>That page is not available.</h1><p>The page may have moved during the website migration.</p><div class="hero-actions"><a class="button primary" href="/">Go home</a><a class="button quiet" href="/news">Read local travel news</a><a class="button quiet" href="tel:+19199240568">Call 919-924-0568</a></div></main></body></html>`,
+    {
+      status: 404,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }
+  );
+}
+
 function clean(value) {
   return String(value || "").trim();
 }
 
 function getOrigin(request) {
-  const url = new URL(request.url);
-  return `${url.protocol}//${url.host}`;
+  return CANONICAL_ORIGIN;
 }
 
 function formatPickupTime(value) {
@@ -66,7 +137,7 @@ function makeReservationId(now = new Date()) {
 }
 
 function getTrackingUrl(request, reservationId) {
-  return `${getOrigin(request)}/reservation.html?id=${encodeURIComponent(reservationId)}`;
+  return `${getOrigin(request)}/reservation?id=${encodeURIComponent(reservationId)}`;
 }
 
 function buildReservation(formData, request) {
@@ -133,6 +204,10 @@ function getReservationStatus(env) {
     toPhone: clean(env.RESERVATION_TO_PHONE) || DEFAULT_TO_PHONE,
     storageConnected: Boolean(env.RESERVATIONS),
   };
+}
+
+function diagnosticsEnabled(env) {
+  return clean(env.EXPOSE_DIAGNOSTICS).toLowerCase() === "true";
 }
 
 async function serveHostedImage(pathname) {
@@ -311,20 +386,56 @@ async function handleReservation(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const pathname = url.pathname.replace(/\/+$/, "") || "/";
 
-    const hostedImage = await serveHostedImage(url.pathname);
+    if (url.hostname === "carolinasedan.com") {
+      url.hostname = CANONICAL_HOST;
+      url.protocol = "https:";
+      return redirect(url.toString());
+    }
+
+    if (url.hostname === CANONICAL_HOST && url.protocol !== "https:") {
+      url.protocol = "https:";
+      return redirect(url.toString());
+    }
+
+    if (pathname.endsWith(".html")) {
+      const canonicalPath = pathname === "/index.html" ? "/" : pathname.slice(0, -5);
+      url.pathname = canonicalPath;
+      return redirect(url.toString());
+    }
+
+    const legacyRedirect = LEGACY_REDIRECTS[pathname];
+    if (legacyRedirect) {
+      return redirect(`${CANONICAL_ORIGIN}${legacyRedirect}`);
+    }
+
+    const hostedImage = await serveHostedImage(pathname);
     if (hostedImage) {
       return hostedImage;
     }
 
-    if (url.pathname === "/api/reservation-status") {
+    if (pathname === "/api/reservation-status") {
+      if (!diagnosticsEnabled(env)) {
+        return json({ ok: true, status: "reservation endpoint available" });
+      }
+
       return json(getReservationStatus(env));
     }
 
-    if (url.pathname === "/api/reservation") {
+    if (pathname === "/api/reservation") {
       return handleReservation(request, env);
     }
 
-    return env.ASSETS.fetch(request);
+    if (PAGE_ROUTES[pathname]) {
+      url.pathname = PAGE_ROUTES[pathname];
+      return env.ASSETS.fetch(new Request(url.toString(), request));
+    }
+
+    if (STATIC_FILES.has(pathname)) {
+      return env.ASSETS.fetch(request);
+    }
+
+    return notFound();
   },
 };
