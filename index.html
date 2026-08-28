@@ -565,7 +565,7 @@
           <h2 id="book-title">Reserve your ride with Carolina Sedan.</h2>
           <p>
             Send your ride details and Carolina Sedan will follow up to confirm availability,
-            pickup time, and final quote.
+            pickup time, and final quote. Reservations are confirmed after availability review.
           </p>
           <div class="contact-card">
             <strong>Call or text 24/7</strong>
@@ -623,6 +623,20 @@
               Flight number
               <input type="text" name="flight-number" placeholder="Optional" />
             </label>
+            <label class="wide">
+              How did you hear about us?
+              <select name="lead-source" required>
+                <option value="">Select one</option>
+                <option value="Google Search">Google Search</option>
+                <option value="Google Maps / Google Business Profile">Google Maps / Google Business Profile</option>
+                <option value="UNC or Duke department">UNC or Duke department</option>
+                <option value="Hotel or concierge">Hotel or concierge</option>
+                <option value="Friend or repeat customer">Friend or repeat customer</option>
+                <option value="Facebook">Facebook</option>
+                <option value="X / Twitter">X / Twitter</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
           </div>
           <label>
             Notes
@@ -631,7 +645,7 @@
           <div class="reservation-summary" id="reservation-summary" hidden></div>
           <button class="button primary full" type="submit">Request reservation</button>
           <p class="form-note" id="reservation-status">
-            Requests are sent to booking@carolinasedan.com. Phone number is preferred so we can confirm quickly.
+            Requests are sent to booking@carolinasedan.com. This is a reservation request, not an instant confirmation. Carolina Sedan will confirm availability, final price, and payment details.
           </p>
         </form>
       </section>

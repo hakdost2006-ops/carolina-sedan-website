@@ -9,7 +9,7 @@
     <link rel="canonical" href="https://www.carolinasedan.com/reservation" />
     <link rel="stylesheet" href="styles.css" />
     <style>
-      .status-card{align-self:start}.status-search{display:grid;gap:16px}.reservation-result{display:grid;gap:14px;padding-top:6px;color:var(--muted)}.reservation-detail h2{margin-bottom:16px;color:var(--forest);font-size:clamp(1.8rem,3.4vw,3rem)}.reservation-detail dl{display:grid;gap:10px;margin:0 0 18px}.reservation-detail dl div{display:grid;grid-template-columns:130px 1fr;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}.reservation-detail dt{color:var(--muted);font-weight:800}.reservation-detail dd{margin:0;color:var(--ink)}@media(max-width:560px){.reservation-detail dl div{grid-template-columns:1fr;gap:4px}}
+      .status-card{align-self:start}.status-search{display:grid;gap:16px}.reservation-result{display:grid;gap:14px;padding-top:6px;color:var(--muted)}.reservation-detail h2{margin-bottom:16px;color:var(--forest);font-size:clamp(1.8rem,3.4vw,3rem)}.reservation-detail dl{display:grid;gap:10px;margin:0 0 18px}.reservation-detail dl div{display:grid;grid-template-columns:130px 1fr;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}.reservation-detail dt{color:var(--muted);font-weight:800}.reservation-detail dd{margin:0;color:var(--ink)}.queue-note{padding:12px;border-radius:8px;background:var(--soft);color:var(--muted)}@media(max-width:560px){.reservation-detail dl div{grid-template-columns:1fr;gap:4px}}
     </style>
   </head>
   <body>
@@ -92,10 +92,18 @@
       }
 
       function renderReservation(reservation) {
+        const paymentLink = reservation.paymentLink
+          ? `<p><a class="button primary" href="${escapeHtml(reservation.paymentLink)}" target="_blank" rel="noopener">Open payment link</a></p>`
+          : "";
+        const customerMessage = reservation.customerMessage
+          ? `<p class="queue-note">${escapeHtml(reservation.customerMessage)}</p>`
+          : "";
+
         result.innerHTML = `
           <div class="reservation-detail">
             <p class="eyebrow">Current Status</p>
             <h2>${formatStatus(reservation.status)}</h2>
+            ${customerMessage}
             <dl>
               <div><dt>Reservation</dt><dd>${escapeHtml(reservation.id)}</dd></div>
               <div><dt>Name</dt><dd>${escapeHtml(reservation.name)}</dd></div>
@@ -104,8 +112,11 @@
               <div><dt>Pickup</dt><dd>${escapeHtml(reservation.pickupAddress)}</dd></div>
               <div><dt>Destination</dt><dd>${escapeHtml(reservation.destinationAddress)}</dd></div>
               <div><dt>Passengers</dt><dd>${escapeHtml(reservation.passengers)}</dd></div>
+              <div><dt>Quoted price</dt><dd>${reservation.quotedPrice ? `$${escapeHtml(reservation.quotedPrice)}` : "Pending review"}</dd></div>
               <div><dt>Payment</dt><dd>${formatStatus(reservation.paymentStatus || "not requested")}</dd></div>
+              <div><dt>Driver</dt><dd>${escapeHtml(reservation.driverName || "Pending assignment")}</dd></div>
             </dl>
+            ${paymentLink}
             <p class="form-note">Need to change something? Call or text <a href="tel:+19199240568">919-924-0568</a>.</p>
           </div>
         `;

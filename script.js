@@ -106,6 +106,63 @@ const reservationSms = "+19199240568";
 const reservationForm = document.querySelector("#reservation-form");
 const reservationStatus = document.querySelector("#reservation-status");
 
+function trackEvent(name, details = {}) {
+  const payload = {
+    event: name,
+    page: window.location.pathname,
+    ...details,
+  };
+
+  if (typeof window.gtag === "function") {
+    window.gtag("event", name, details);
+  }
+
+  if (window.zaraz?.track) {
+    window.zaraz.track(name, details);
+  }
+
+  const body = JSON.stringify(payload);
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon("/api/track", new Blob([body], { type: "application/json" }));
+    return;
+  }
+
+  fetch("/api/track", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body,
+    keepalive: true,
+  }).catch(() => {});
+}
+
+function addTrackingHooks() {
+  document.querySelectorAll('a[href="#book"], a[href="/#book"], .button.primary').forEach((link) => {
+    link.addEventListener("click", () => {
+      trackEvent("booking_cta_click", {
+        label: link.textContent.trim(),
+        href: link.getAttribute("href") || "",
+      });
+    });
+  });
+
+  document.querySelectorAll('a[href^="tel:"]').forEach((link) => {
+    link.addEventListener("click", () => {
+      trackEvent("phone_click", {
+        label: link.textContent.trim(),
+        href: link.getAttribute("href") || "",
+      });
+    });
+  });
+
+  document.querySelector("#estimate-form .button.primary")?.addEventListener("click", () => {
+    trackEvent("estimate_to_booking_click", {
+      estimate: output?.textContent || "",
+      pickup: pickup?.value || "",
+      rideType: rideType?.value || "",
+    });
+  });
+}
+
 const newsLinks = [
   "unc-health-championship-raleigh-ride-tips-2026.html",
   "durham-duke-street-closure-detours-2026.html",
@@ -167,11 +224,12 @@ function upgradeReservationForm() {
       <label class="wide">Destination<input type="text" name="destination-address" placeholder="Where are you going?" required /></label>
       <label>Luggage<input type="text" name="luggage" placeholder="Example: 2 checked bags" /></label>
       <label>Flight number<input type="text" name="flight-number" placeholder="Optional" /></label>
+      <label class="wide">How did you hear about us?<select name="lead-source" required><option value="">Select one</option><option value="Google Search">Google Search</option><option value="Google Maps / Google Business Profile">Google Maps / Google Business Profile</option><option value="UNC or Duke department">UNC or Duke department</option><option value="Hotel or concierge">Hotel or concierge</option><option value="Friend or repeat customer">Friend or repeat customer</option><option value="Facebook">Facebook</option><option value="X / Twitter">X / Twitter</option><option value="Other">Other</option></select></label>
     </div>
     <label>Notes<textarea name="details" rows="5" placeholder="Car seat, extra stops, exact entrance, accessibility needs, or anything else we should know"></textarea></label>
     <div class="reservation-summary" id="reservation-summary" hidden></div>
     <button class="button primary full" type="submit">Request reservation</button>
-    <p class="form-note" id="reservation-status">Requests are sent to booking@carolinasedan.com. Phone number is preferred so we can confirm quickly.</p>
+    <p class="form-note" id="reservation-status">Requests are sent to booking@carolinasedan.com. This is a reservation request, not an instant confirmation. Carolina Sedan will confirm availability, final price, and payment details.</p>
   `;
 }
 
@@ -255,6 +313,7 @@ function polishLiveContent() {
 }
 
 polishLiveContent();
+addTrackingHooks();
 
 function formatPickupTime(value) {
   if (!value) return "Not provided";
@@ -282,6 +341,7 @@ function buildReservationMessage(formData) {
     `Passengers: ${getFormValue(formData, "passengers")}`,
     `Luggage: ${getFormValue(formData, "luggage") || "Not provided"}`,
     `Flight: ${getFormValue(formData, "flight-number") || "Not provided"}`,
+    `Lead source: ${getFormValue(formData, "lead-source") || "Not provided"}`,
     "",
     "Notes:",
     getFormValue(formData, "details") || "None",
@@ -292,7 +352,7 @@ function showReservationSuccess(result, form) {
   const currentStatus = document.querySelector("#reservation-status");
   const summary = document.querySelector("#reservation-summary");
   const reservationId = result.reservationId || result.id;
-  const statusUrl = result.statusUrl || (reservationId ? `/reservation.html?id=${encodeURIComponent(reservationId)}` : "");
+  const statusUrl = result.statusUrl || (reservationId ? `/reservation?id=${encodeURIComponent(reservationId)}` : "");
 
   if (currentStatus) {
     currentStatus.textContent = reservationId
@@ -309,6 +369,10 @@ function showReservationSuccess(result, form) {
     `;
   }
 
+  trackEvent("reservation_submit_success", {
+    reservationId,
+    rideType: getFormValue(new FormData(form), "ride-type"),
+  });
   form.reset();
 }
 
@@ -327,6 +391,10 @@ reservationForm?.addEventListener("submit", (event) => {
 
   if (submit) submit.disabled = true;
   if (currentStatus) currentStatus.textContent = "Sending your reservation request...";
+  trackEvent("reservation_submit_attempt", {
+    rideType: getFormValue(formData, "ride-type"),
+    leadSource: getFormValue(formData, "lead-source"),
+  });
   if (summary) {
     summary.hidden = true;
     summary.textContent = "";
@@ -347,6 +415,10 @@ reservationForm?.addEventListener("submit", (event) => {
       showReservationSuccess(result, form);
     })
     .catch((error) => {
+      trackEvent("reservation_submit_error", {
+        message: error.message,
+        rideType: getFormValue(formData, "ride-type"),
+      });
       const status = document.querySelector("#reservation-status");
       if (status) {
         status.innerHTML = `

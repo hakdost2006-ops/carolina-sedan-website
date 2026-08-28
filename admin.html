@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reservation Queue | Carolina Sedan</title>
+    <meta name="robots" content="noindex" />
+    <link rel="canonical" href="https://www.carolinasedan.com/admin" />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .admin-shell{width:min(1240px,calc(100% - 36px));margin:0 auto;padding:42px 0 90px}.admin-bar{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:end;margin-bottom:20px}.admin-login{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}.queue{display:grid;gap:16px}.queue-card{display:grid;grid-template-columns:1fr 360px;gap:18px;padding:20px;border:1px solid var(--line);border-radius:8px;background:var(--white);box-shadow:0 10px 26px rgba(23,32,27,.08)}.queue-card h2{font-size:1.4rem;line-height:1.15}.queue-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0;color:var(--muted);font-size:.92rem}.queue-meta strong{display:block;color:var(--ink)}.queue-actions{display:grid;gap:10px}.queue-actions .compact-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.queue-note{padding:12px;border-radius:8px;background:var(--soft);color:var(--muted);font-size:.92rem}.status-pill{display:inline-flex;width:fit-content;padding:6px 10px;border-radius:999px;color:var(--white);background:var(--green);font-size:.78rem;font-weight:900;text-transform:uppercase}.status-pill.pending-confirmation{background:var(--brick)}.status-pill.declined,.status-pill.canceled{background:#6b7280}.status-pill.completed,.status-pill.paid{background:var(--forest)}@media(max-width:900px){.admin-bar,.admin-login,.queue-card{grid-template-columns:1fr}.queue-meta{grid-template-columns:1fr}.queue-actions .compact-grid{grid-template-columns:1fr}}
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/#top" aria-label="Carolina Sedan Service home">
+        <img class="brand-logo" src="/assets/carolina-sedan-logo.jpeg" alt="" />
+        <span>
+          <strong>Carolina Sedan</strong>
+          <small>Reservation queue</small>
+        </span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="/">Website</a>
+        <a href="/reservation">Customer status</a>
+      </nav>
+      <a class="header-call" href="tel:+19199240568">Call 24/7</a>
+    </header>
+
+    <main class="admin-shell">
+      <section class="admin-bar">
+        <div>
+          <p class="eyebrow">Owner Dashboard</p>
+          <h1>Reservation queue.</h1>
+          <p class="form-note">Use this to review requests, confirm availability, add a quote, attach a payment link, assign a driver, and keep notes. Updates change the customer status page but do not automatically send email or SMS.</p>
+        </div>
+        <form class="admin-login" id="admin-login">
+          <label>
+            Admin token
+            <input id="admin-token" type="password" autocomplete="current-password" placeholder="Cloudflare ADMIN_TOKEN" required />
+          </label>
+          <button class="button primary" type="submit">Load queue</button>
+        </form>
+      </section>
+
+      <div id="admin-status" class="queue-note">Enter the admin token from Cloudflare Worker secrets to load reservations.</div>
+      <section id="reservation-queue" class="queue" aria-live="polite"></section>
+    </main>
+
+    <script>
+      const loginForm = document.querySelector("#admin-login");
+      const tokenInput = document.querySelector("#admin-token");
+      const statusBox = document.querySelector("#admin-status");
+      const queue = document.querySelector("#reservation-queue");
+      const savedToken = localStorage.getItem("carolinaSedanAdminToken") || "";
+      tokenInput.value = savedToken;
+
+      const reservationStatuses = ["pending-confirmation", "confirmed", "declined", "completed", "canceled", "reschedule-requested"];
+      const paymentStatuses = ["not-requested", "payment-link-sent", "paid", "pay-on-ride", "refunded"];
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function optionList(values, selected) {
+        return values.map((value) => `<option value="${value}" ${value === selected ? "selected" : ""}>${value.replaceAll("-", " ")}</option>`).join("");
+      }
+
+      function formatDate(value) {
+        if (!value) return "Not provided";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
+      }
+
+      async function api(path, options = {}) {
+        const token = tokenInput.value.trim();
+        const response = await fetch(path, {
+          ...options,
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+            ...(options.headers || {}),
+          },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "Request failed.");
+        return data;
+      }
+
+      function renderReservation(reservation) {
+        return `
+          <article class="queue-card" data-id="${escapeHtml(reservation.id)}">
+            <div>
+              <span class="status-pill ${escapeHtml(reservation.status)}">${escapeHtml(reservation.status).replaceAll("-", " ")}</span>
+              <h2>${escapeHtml(reservation.name)} | ${escapeHtml(reservation.rideType)}</h2>
+              <div class="queue-meta">
+                <div><strong>Reservation</strong>${escapeHtml(reservation.id)}</div>
+                <div><strong>Submitted</strong>${formatDate(reservation.createdAt)}</div>
+                <div><strong>Phone</strong><a href="tel:${escapeHtml(reservation.phone)}">${escapeHtml(reservation.phone || "Not provided")}</a></div>
+                <div><strong>Email</strong>${escapeHtml(reservation.email || "Not provided")}</div>
+                <div><strong>Pickup time</strong>${escapeHtml(reservation.pickupTimeLabel)}</div>
+                <div><strong>Lead source</strong>${escapeHtml(reservation.leadSource || "Not provided")}</div>
+                <div><strong>Pickup</strong>${escapeHtml(reservation.pickupAddress)}</div>
+                <div><strong>Destination</strong>${escapeHtml(reservation.destinationAddress)}</div>
+                <div><strong>Passengers</strong>${escapeHtml(reservation.passengers)}</div>
+                <div><strong>Flight</strong>${escapeHtml(reservation.flightNumber || "Not provided")}</div>
+              </div>
+              <p class="queue-note">${escapeHtml(reservation.details || "No notes provided.")}</p>
+              <p class="form-note"><a href="/reservation?id=${encodeURIComponent(reservation.id)}" target="_blank" rel="noopener">Open customer status page</a></p>
+            </div>
+            <form class="queue-actions">
+              <div class="compact-grid">
+                <label>Status<select name="status">${optionList(reservationStatuses, reservation.status || "pending-confirmation")}</select></label>
+                <label>Payment<select name="paymentStatus">${optionList(paymentStatuses, reservation.paymentStatus || "not-requested")}</select></label>
+                <label>Quoted price<input name="quotedPrice" inputmode="decimal" placeholder="Example: 95" value="${escapeHtml(reservation.quotedPrice || "")}" /></label>
+                <label>Driver<input name="driverName" placeholder="Driver name" value="${escapeHtml(reservation.driverName || "")}" /></label>
+              </div>
+              <label>Payment link<input name="paymentLink" type="url" placeholder="https://..." value="${escapeHtml(reservation.paymentLink || "")}" /></label>
+              <label>Customer message<textarea name="customerMessage" rows="3" placeholder="Visible on customer status page">${escapeHtml(reservation.customerMessage || "")}</textarea></label>
+              <label>Internal notes<textarea name="adminNotes" rows="3" placeholder="Private owner notes">${escapeHtml(reservation.adminNotes || "")}</textarea></label>
+              <button class="button primary full" type="submit">Save update</button>
+            </form>
+          </article>
+        `;
+      }
+
+      async function loadQueue() {
+        statusBox.textContent = "Loading reservation queue...";
+        const data = await api("/api/admin/reservations");
+        queue.innerHTML = data.reservations.length
+          ? data.reservations.map(renderReservation).join("")
+          : `<div class="queue-note">No reservations found.</div>`;
+        statusBox.textContent = `${data.count} reservation request${data.count === 1 ? "" : "s"} loaded.`;
+        localStorage.setItem("carolinaSedanAdminToken", tokenInput.value.trim());
+      }
+
+      loginForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        loadQueue().catch((error) => {
+          statusBox.textContent = error.message;
+        });
+      });
+
+      queue.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const card = event.target.closest("[data-id]");
+        const formData = new FormData(event.target);
+        const payload = Object.fromEntries(formData.entries());
+        payload.id = card.dataset.id;
+        statusBox.textContent = `Saving ${payload.id}...`;
+        try {
+          await api("/api/admin/reservations", {
+            method: "PATCH",
+            body: JSON.stringify(payload),
+          });
+          statusBox.textContent = `${payload.id} updated.`;
+          await loadQueue();
+        } catch (error) {
+          statusBox.textContent = error.message;
+        }
+      });
+
+      if (savedToken) {
+        loadQueue().catch(() => {});
+      }
+    </script>
+  </body>
+</html>

@@ -3,6 +3,15 @@ const DEFAULT_TO_EMAIL = "booking@carolinasedan.com";
 const DEFAULT_FROM_EMAIL = "Carolina Sedan <booking@carolinasedan.com>";
 const DEFAULT_TO_PHONE = "+19199240568";
 const RESERVATION_PREFIX = "CSS";
+const ADMIN_STATUSES = new Set([
+  "pending-confirmation",
+  "confirmed",
+  "declined",
+  "completed",
+  "canceled",
+  "reschedule-requested",
+]);
+const PAYMENT_STATUSES = new Set(["not-requested", "payment-link-sent", "paid", "pay-on-ride", "refunded"]);
 const CANONICAL_HOST = "www.carolinasedan.com";
 const CANONICAL_ORIGIN = `https://${CANONICAL_HOST}`;
 
@@ -33,6 +42,7 @@ const LEGACY_REDIRECTS = {
 
 const PAGE_ROUTES = {
   "/": "/index.html",
+  "/admin": "/admin.html",
   "/about": "/about.html",
   "/ai-summary": "/ai-summary.html",
   "/chapel-hill-regional-weekend-ride-tips-2026": "/chapel-hill-regional-weekend-ride-tips-2026.html",
@@ -98,6 +108,28 @@ function clean(value) {
   return String(value || "").trim();
 }
 
+function cleanMoney(value) {
+  const cleaned = clean(value).replace(/[^0-9.]/g, "");
+  if (!cleaned) return "";
+  return cleaned;
+}
+
+function safeUrl(value) {
+  const url = clean(value);
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+function hasField(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
 function getOrigin(request) {
   return CANONICAL_ORIGIN;
 }
@@ -158,6 +190,7 @@ function buildReservation(formData, request) {
     email,
     contact: [phone, email].filter(Boolean).join(" | "),
     rideType: clean(formData.get("ride-type")) || "Reservation request",
+    leadSource: clean(formData.get("lead-source")) || "Not provided",
     pickupTime,
     pickupTimeLabel: formatPickupTime(pickupTime),
     pickupAddress: clean(formData.get("pickup-address")),
@@ -186,6 +219,7 @@ function buildMessage(data) {
     `Passengers: ${data.passengers}`,
     `Luggage: ${data.luggage || "Not provided"}`,
     `Flight: ${data.flightNumber || "Not provided"}`,
+    `Lead source: ${data.leadSource || "Not provided"}`,
     "",
     "Notes:",
     data.details || "None",
@@ -294,9 +328,167 @@ async function saveReservation(env, reservation) {
 
   await env.RESERVATIONS.put(`reservation:${reservation.id}`, JSON.stringify(reservation), {
     expirationTtl: 60 * 60 * 24 * 180,
+    metadata: {
+      createdAt: reservation.createdAt,
+      status: reservation.status,
+      paymentStatus: reservation.paymentStatus,
+      leadSource: reservation.leadSource,
+    },
   });
 
   return { saved: true };
+}
+
+function getAdminToken(request) {
+  const header = request.headers.get("authorization") || "";
+  if (header.toLowerCase().startsWith("bearer ")) return header.slice(7).trim();
+
+  const url = new URL(request.url);
+  return clean(url.searchParams.get("token"));
+}
+
+function requireAdmin(request, env) {
+  const configured = clean(env.ADMIN_TOKEN);
+  if (!configured) return { ok: false, response: json({ error: "ADMIN_TOKEN is not configured." }, 503) };
+  if (getAdminToken(request) !== configured) return { ok: false, response: json({ error: "Unauthorized." }, 401) };
+  return { ok: true };
+}
+
+function publicReservation(reservation) {
+  return {
+    id: reservation.id,
+    status: reservation.status,
+    paymentStatus: reservation.paymentStatus,
+    createdAt: reservation.createdAt,
+    updatedAt: reservation.updatedAt,
+    trackingUrl: reservation.trackingUrl,
+    name: reservation.name,
+    rideType: reservation.rideType,
+    pickupTime: reservation.pickupTime,
+    pickupTimeLabel: reservation.pickupTimeLabel,
+    pickupAddress: reservation.pickupAddress,
+    destinationAddress: reservation.destinationAddress,
+    passengers: reservation.passengers,
+    luggage: reservation.luggage,
+    flightNumber: reservation.flightNumber,
+    quotedPrice: reservation.quotedPrice,
+    paymentLink: reservation.paymentLink,
+    driverName: reservation.driverName,
+    customerMessage: reservation.customerMessage,
+  };
+}
+
+async function listReservations(request, env) {
+  const auth = requireAdmin(request, env);
+  if (!auth.ok) return auth.response;
+
+  if (!env.RESERVATIONS) return json({ error: "RESERVATIONS KV binding is not configured." }, 503);
+
+  const url = new URL(request.url);
+  const statusFilter = clean(url.searchParams.get("status"));
+  const list = await env.RESERVATIONS.list({ prefix: "reservation:", limit: 100 });
+  const reservations = (
+    await Promise.all(list.keys.map((key) => env.RESERVATIONS.get(key.name, "json")))
+  )
+    .filter(Boolean)
+    .filter((reservation) => !statusFilter || reservation.status === statusFilter)
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+
+  return json({ ok: true, reservations, count: reservations.length, truncated: Boolean(list.list_complete === false) });
+}
+
+async function updateReservation(request, env) {
+  const auth = requireAdmin(request, env);
+  if (!auth.ok) return auth.response;
+
+  if (!env.RESERVATIONS) return json({ error: "RESERVATIONS KV binding is not configured." }, 503);
+
+  let input;
+  try {
+    input = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON body." }, 400);
+  }
+
+  const id = clean(input.id).toUpperCase();
+  if (!id) return json({ error: "Reservation ID is required." }, 400);
+
+  const existing = await env.RESERVATIONS.get(`reservation:${id}`, "json");
+  if (!existing) return json({ error: "Reservation was not found." }, 404);
+
+  const status = clean(input.status) || existing.status || "pending-confirmation";
+  const paymentStatus = clean(input.paymentStatus) || existing.paymentStatus || "not-requested";
+
+  if (!ADMIN_STATUSES.has(status)) return json({ error: "Invalid reservation status." }, 400);
+  if (!PAYMENT_STATUSES.has(paymentStatus)) return json({ error: "Invalid payment status." }, 400);
+
+  const updated = {
+    ...existing,
+    status,
+    paymentStatus,
+    quotedPrice: hasField(input, "quotedPrice") ? cleanMoney(input.quotedPrice) : existing.quotedPrice || "",
+    paymentLink: hasField(input, "paymentLink") ? safeUrl(input.paymentLink) : existing.paymentLink || "",
+    driverName: hasField(input, "driverName") ? clean(input.driverName) : existing.driverName || "",
+    customerMessage: hasField(input, "customerMessage") ? clean(input.customerMessage) : existing.customerMessage || "",
+    adminNotes: hasField(input, "adminNotes") ? clean(input.adminNotes) : existing.adminNotes || "",
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (status === "confirmed" && !updated.confirmedAt) updated.confirmedAt = updated.updatedAt;
+  if (status === "declined" && !updated.declinedAt) updated.declinedAt = updated.updatedAt;
+  if (status === "completed" && !updated.completedAt) updated.completedAt = updated.updatedAt;
+  if (status === "canceled" && !updated.canceledAt) updated.canceledAt = updated.updatedAt;
+
+  await env.RESERVATIONS.put(`reservation:${id}`, JSON.stringify(updated), {
+    expirationTtl: 60 * 60 * 24 * 180,
+    metadata: {
+      createdAt: updated.createdAt,
+      status: updated.status,
+      paymentStatus: updated.paymentStatus,
+      leadSource: updated.leadSource,
+    },
+  });
+
+  return json({ ok: true, reservation: updated });
+}
+
+async function handleAdminReservations(request, env) {
+  if (request.method === "GET") return listReservations(request, env);
+  if (request.method === "PATCH") return updateReservation(request, env);
+  return json({ error: "Use GET to list reservations or PATCH to update one." }, 405);
+}
+
+async function handleTrack(request, env) {
+  if (request.method !== "POST") return json({ error: "Use POST for analytics events." }, 405);
+
+  let input = {};
+  try {
+    input = await request.json();
+  } catch {
+    return new Response(null, { status: 204 });
+  }
+
+  const event = clean(input.event).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
+  if (!event) return new Response(null, { status: 204 });
+
+  if (env.RESERVATIONS) {
+    const record = {
+      event,
+      page: clean(input.page).slice(0, 160),
+      label: clean(input.label).slice(0, 160),
+      href: clean(input.href).slice(0, 160),
+      rideType: clean(input.rideType).slice(0, 80),
+      leadSource: clean(input.leadSource).slice(0, 80),
+      createdAt: new Date().toISOString(),
+      userAgent: clean(request.headers.get("user-agent")).slice(0, 180),
+    };
+
+    await env.RESERVATIONS.put(`analytics:${Date.now()}:${crypto.randomUUID()}`, JSON.stringify(record), {
+      expirationTtl: 60 * 60 * 24 * 90,
+    });
+  }
+
+  return new Response(null, { status: 204 });
 }
 
 async function getReservation(request, env) {
@@ -324,7 +516,7 @@ async function getReservation(request, env) {
     return json({ error: "Reservation was not found." }, 404);
   }
 
-  return json({ ok: true, reservation, storageConnected: true });
+  return json({ ok: true, reservation: publicReservation(reservation), storageConnected: true });
 }
 
 async function handleReservation(request, env) {
@@ -425,6 +617,14 @@ export default {
 
     if (pathname === "/api/reservation") {
       return handleReservation(request, env);
+    }
+
+    if (pathname === "/api/admin/reservations") {
+      return handleAdminReservations(request, env);
+    }
+
+    if (pathname === "/api/track") {
+      return handleTrack(request, env);
     }
 
     if (PAGE_ROUTES[pathname]) {
