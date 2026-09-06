@@ -15,19 +15,10 @@ const PAYMENT_STATUSES = new Set(["not-requested", "payment-link-sent", "paid", 
 const CANONICAL_HOST = "www.carolinasedan.com";
 const CANONICAL_ORIGIN = `https://${CANONICAL_HOST}`;
 
-const HOSTED_IMAGES = {
-  "/assets/carolina-sedan-logo.jpeg":
-    "https://static.wixstatic.com/media/227b82_7387b084eac248a08f01c9856a4d3ab1~mv2.jpeg/v1/fill/w_246,h_197,al_c,q_90,enc_auto/Carolina%20S%20logo.jpeg",
-  "/assets/carolina-lexus.jpeg":
-    "https://static.wixstatic.com/media/227b82_f254873438d6493fb0d312c202b41649~mv2.jpeg/v1/fill/w_794,h_794,al_c,q_90,enc_auto/Caolina%20Lexus.jpeg",
-  "/assets/chauffeur-hero.jpg":
-    "https://static.wixstatic.com/media/ea26fd_b01c89023bd4439a87f0498ddb39dabb~mv2_d_3840_2200_s_2.jpg/v1/fill/w_1600,h_920,al_c,q_90,enc_auto/hero.jpg",
-  "/assets/airport-service.png":
-    "https://static.wixstatic.com/media/ea26fd_b01c89023bd4439a87f0498ddb39dabb~mv2_d_3840_2200_s_2.jpg/v1/fill/w_1600,h_920,al_c,q_90,enc_auto/hero.jpg",
-};
-
 const LEGACY_REDIRECTS = {
   "/blog": "/news",
+  "/chapel-hill-regional-weekend-ride-tips-2026":
+    "/news#chapel-hill-regional-weekend-ride-tips-2026",
   "/post/exploring-the-best-restaurants-in-chapel-hill-and-carrboro-with-carolina-sedan-service":
     "/news#restaurants",
   "/post/discover-carolina-sedan-services-top-10-chapel-hill-carrboro-attractions":
@@ -45,9 +36,11 @@ const PAGE_ROUTES = {
   "/admin": "/admin.html",
   "/about": "/about.html",
   "/ai-summary": "/ai-summary.html",
-  "/chapel-hill-regional-weekend-ride-tips-2026": "/chapel-hill-regional-weekend-ride-tips-2026.html",
   "/chapel-hill-carrboro-dex-fest-travel-update-2026":
     "/chapel-hill-carrboro-dex-fest-travel-update-2026.html",
+  "/corporate-transportation-rtp": "/corporate-transportation-rtp.html",
+  "/duke-family-weekend-transportation-2026": "/duke-family-weekend-transportation-2026.html",
+  "/durham-black-car-rdu-transportation": "/durham-black-car-rdu-transportation.html",
   "/durham-duke-street-closure-detours-2026": "/durham-duke-street-closure-detours-2026.html",
   "/event-transportation-triangle": "/event-transportation-triangle.html",
   "/hotel-rdu-transportation": "/hotel-rdu-transportation.html",
@@ -67,6 +60,12 @@ const PAGE_ROUTES = {
   "/unc-baseball-super-regional-weekend-travel-2026": "/unc-baseball-super-regional-weekend-travel-2026.html",
   "/unc-department-transportation": "/unc-department-transportation.html",
   "/unc-health-championship-raleigh-ride-tips-2026": "/unc-health-championship-raleigh-ride-tips-2026.html",
+  "/unc-homecoming-transportation-2026": "/unc-homecoming-transportation-2026.html",
+  "/unc-nc-state-thanksgiving-transportation-2026":
+    "/unc-nc-state-thanksgiving-transportation-2026.html",
+  "/unc-notre-dame-transportation-2026": "/unc-notre-dame-transportation-2026.html",
+  "/unc-water-health-conference-transportation-2026":
+    "/unc-water-health-conference-transportation-2026.html",
 };
 
 const STATIC_FILES = new Set([
@@ -78,6 +77,13 @@ const STATIC_FILES = new Set([
   "/script.js",
   "/styles.css",
   "/team.css",
+  "/assets/airport-service.png",
+  "/assets/carolina-lexus.jpeg",
+  "/assets/carolina-sedan-logo.jpeg",
+  "/assets/chauffeur-hero.jpg",
+  "/assets/team-beck.jpeg",
+  "/assets/team-noah.jpg",
+  "/assets/team-sam.jpeg",
 ]);
 
 function json(data, status = 200) {
@@ -132,6 +138,18 @@ function hasField(object, key) {
 
 function getOrigin(request) {
   return CANONICAL_ORIGIN;
+}
+
+function getCampaign(value, request) {
+  const submitted = clean(value).slice(0, 100);
+  if (submitted) return submitted;
+
+  try {
+    const referer = new URL(clean(request.headers.get("referer")));
+    return clean(referer.searchParams.get("campaign")).slice(0, 100) || "Direct / not tagged";
+  } catch {
+    return "Direct / not tagged";
+  }
 }
 
 function formatPickupTime(value) {
@@ -191,6 +209,7 @@ function buildReservation(formData, request) {
     contact: [phone, email].filter(Boolean).join(" | "),
     rideType: clean(formData.get("ride-type")) || "Reservation request",
     leadSource: clean(formData.get("lead-source")) || "Not provided",
+    campaign: getCampaign(formData.get("campaign"), request),
     pickupTime,
     pickupTimeLabel: formatPickupTime(pickupTime),
     pickupAddress: clean(formData.get("pickup-address")),
@@ -220,6 +239,7 @@ function buildMessage(data) {
     `Luggage: ${data.luggage || "Not provided"}`,
     `Flight: ${data.flightNumber || "Not provided"}`,
     `Lead source: ${data.leadSource || "Not provided"}`,
+    `Campaign: ${data.campaign || "Direct / not tagged"}`,
     "",
     "Notes:",
     data.details || "None",
@@ -242,25 +262,6 @@ function getReservationStatus(env) {
 
 function diagnosticsEnabled(env) {
   return clean(env.EXPOSE_DIAGNOSTICS).toLowerCase() === "true";
-}
-
-async function serveHostedImage(pathname) {
-  const imageUrl = HOSTED_IMAGES[pathname];
-  if (!imageUrl) return null;
-
-  const imageResponse = await fetch(imageUrl, {
-    cf: { cacheEverything: true, cacheTtl: 31536000 },
-  });
-
-  const headers = new Headers(imageResponse.headers);
-  headers.set("cache-control", "public, max-age=31536000, immutable");
-  headers.set("x-content-type-options", "nosniff");
-
-  return new Response(imageResponse.body, {
-    status: imageResponse.status,
-    statusText: imageResponse.statusText,
-    headers,
-  });
 }
 
 async function sendEmail(env, data, message) {
@@ -333,6 +334,7 @@ async function saveReservation(env, reservation) {
       status: reservation.status,
       paymentStatus: reservation.paymentStatus,
       leadSource: reservation.leadSource,
+      campaign: reservation.campaign,
     },
   });
 
@@ -446,6 +448,7 @@ async function updateReservation(request, env) {
       status: updated.status,
       paymentStatus: updated.paymentStatus,
       leadSource: updated.leadSource,
+      campaign: updated.campaign,
     },
   });
 
@@ -479,6 +482,7 @@ async function handleTrack(request, env) {
       href: clean(input.href).slice(0, 160),
       rideType: clean(input.rideType).slice(0, 80),
       leadSource: clean(input.leadSource).slice(0, 80),
+      campaign: getCampaign(input.campaign, request),
       createdAt: new Date().toISOString(),
       userAgent: clean(request.headers.get("user-agent")).slice(0, 180),
     };
@@ -600,11 +604,6 @@ export default {
     const legacyRedirect = LEGACY_REDIRECTS[pathname];
     if (legacyRedirect) {
       return redirect(`${CANONICAL_ORIGIN}${legacyRedirect}`);
-    }
-
-    const hostedImage = await serveHostedImage(pathname);
-    if (hostedImage) {
-      return hostedImage;
     }
 
     if (pathname === "/api/reservation-status") {

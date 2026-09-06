@@ -37,7 +37,7 @@ const routeContent = {
 };
 
 const reliableRouteImage =
-  "https://static.wixstatic.com/media/ea26fd_b01c89023bd4439a87f0498ddb39dabb~mv2_d_3840_2200_s_2.jpg/v1/fill/w_1600,h_920,al_c,q_90,enc_auto/hero.jpg";
+  "/assets/chauffeur-hero.jpg";
 
 const serviceCards = document.querySelectorAll(".service-card");
 const serviceDetail = document.querySelector("#service-detail");
@@ -225,12 +225,16 @@ function upgradeReservationForm() {
       <label>Luggage<input type="text" name="luggage" placeholder="Example: 2 checked bags" /></label>
       <label>Flight number<input type="text" name="flight-number" placeholder="Optional" /></label>
       <label class="wide">How did you hear about us?<select name="lead-source" required><option value="">Select one</option><option value="Google Search">Google Search</option><option value="Google Maps / Google Business Profile">Google Maps / Google Business Profile</option><option value="UNC or Duke department">UNC or Duke department</option><option value="Hotel or concierge">Hotel or concierge</option><option value="Friend or repeat customer">Friend or repeat customer</option><option value="Facebook">Facebook</option><option value="X / Twitter">X / Twitter</option><option value="Other">Other</option></select></label>
+      <input type="hidden" name="campaign" value="" />
     </div>
     <label>Notes<textarea name="details" rows="5" placeholder="Car seat, extra stops, exact entrance, accessibility needs, or anything else we should know"></textarea></label>
     <div class="reservation-summary" id="reservation-summary" hidden></div>
     <button class="button primary full" type="submit">Request reservation</button>
     <p class="form-note" id="reservation-status">Requests are sent to booking@carolinasedan.com. This is a reservation request, not an instant confirmation. Carolina Sedan will confirm availability, final price, and payment details.</p>
   `;
+  const campaign = new URLSearchParams(window.location.search).get("campaign");
+  const campaignField = reservationForm.elements.namedItem("campaign");
+  if (campaign && campaignField) campaignField.setAttribute("value", campaign.slice(0, 100));
 }
 
 function polishLiveContent() {
@@ -342,6 +346,7 @@ function buildReservationMessage(formData) {
     `Luggage: ${getFormValue(formData, "luggage") || "Not provided"}`,
     `Flight: ${getFormValue(formData, "flight-number") || "Not provided"}`,
     `Lead source: ${getFormValue(formData, "lead-source") || "Not provided"}`,
+    `Campaign: ${getFormValue(formData, "campaign") || "Direct / not tagged"}`,
     "",
     "Notes:",
     getFormValue(formData, "details") || "None",
@@ -394,6 +399,7 @@ reservationForm?.addEventListener("submit", (event) => {
   trackEvent("reservation_submit_attempt", {
     rideType: getFormValue(formData, "ride-type"),
     leadSource: getFormValue(formData, "lead-source"),
+    campaign: getFormValue(formData, "campaign"),
   });
   if (summary) {
     summary.hidden = true;
