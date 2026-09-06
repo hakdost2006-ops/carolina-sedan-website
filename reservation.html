@@ -75,6 +75,7 @@
       const idInput = document.querySelector("#reservation-id");
       const result = document.querySelector("#status-result");
       const params = new URLSearchParams(window.location.search);
+      const justSubmitted = params.get("submitted") === "1";
 
       function escapeHtml(value) {
         return String(value || "")
@@ -92,6 +93,9 @@
       }
 
       function renderReservation(reservation) {
+        const receivedMessage = justSubmitted
+          ? `<p class="queue-note"><strong>Reservation request received.</strong><br />Save this page or reservation number so you can return to the latest status.</p>`
+          : "";
         const paymentLink = reservation.paymentLink
           ? `<p><a class="button primary" href="${escapeHtml(reservation.paymentLink)}" target="_blank" rel="noopener">Open payment link</a></p>`
           : "";
@@ -103,6 +107,7 @@
           <div class="reservation-detail">
             <p class="eyebrow">Current Status</p>
             <h2>${formatStatus(reservation.status)}</h2>
+            ${receivedMessage}
             ${customerMessage}
             <dl>
               <div><dt>Reservation</dt><dd>${escapeHtml(reservation.id)}</dd></div>

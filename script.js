@@ -379,6 +379,14 @@ function showReservationSuccess(result, form) {
     rideType: getFormValue(new FormData(form), "ride-type"),
   });
   form.reset();
+
+  if (statusUrl && result.storageConnected) {
+    const destination = new URL(statusUrl, window.location.origin);
+    if (destination.origin === window.location.origin) {
+      destination.searchParams.set("submitted", "1");
+      window.location.assign(`${destination.pathname}${destination.search}`);
+    }
+  }
 }
 
 reservationForm?.addEventListener("submit", (event) => {
