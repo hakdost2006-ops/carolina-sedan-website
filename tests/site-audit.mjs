@@ -175,6 +175,21 @@ if (!/^tests\/$/m.test(assetIgnore)) report(errors, ".assetsignore", "tests dire
 if (!/^test-reservation\.html$/m.test(assetIgnore)) {
   report(errors, ".assetsignore", "test reservation page is not excluded from deployment");
 }
+for (const privateAsset of [
+  ".git",
+  "*.md",
+  "worker.js",
+  "wrangler.jsonc",
+  "functions/",
+  "_headers",
+  "_redirects",
+  ".assetsignore",
+  ".gitignore",
+]) {
+  if (!assetIgnore.split(/\r?\n/).includes(privateAsset)) {
+    report(errors, ".assetsignore", `repository support file is not excluded from deployment: ${privateAsset}`);
+  }
+}
 
 const customerFacing = [...pages.values()]
   .filter((page) => !["admin.html", "test-reservation.html"].includes(page.file))

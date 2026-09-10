@@ -1,8 +1,17 @@
+.git
 .git/
 .wrangler/
 node_modules/
 *.zip
 *.log
+*.md
+worker.js
+wrangler.jsonc
+functions/
+_headers
+_redirects
+.assetsignore
+.gitignore
 tests/
 test-reservation.html
 assets/airport-service.png
