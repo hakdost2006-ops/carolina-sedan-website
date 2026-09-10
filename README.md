@@ -57,7 +57,27 @@ The `/admin` page loads saved reservations from the `RESERVATIONS` KV binding wh
 - customer-visible message
 - private admin notes
 
-These updates change the customer `/reservation?id=...` status page. They do not automatically send email, SMS, or charge a customer. Payment links should be created manually until Stripe is configured and tested.
+The owner has two separate actions for each reservation:
+
+- **Save without email** updates the private queue and customer status page only.
+- **Confirm & email customer** marks the reservation confirmed and sends the approved ride details, final price, status link, and optional HTTPS payment link to the customer's email through Resend.
+
+The confirmation action requires a valid customer email and final quoted price, previews the fare and payment method in a second browser confirmation, disables repeat clicks while sending, and uses a unique request ID so a retried request cannot create a duplicate email. A five-minute per-reservation cooldown blocks accidental repeat confirmations after delivery. Delivery success or failure is stored with the reservation for owner review.
+
+This action does not charge the customer and does not send SMS. Payment links remain owner-created until Stripe is configured and tested.
+
+### Reservation spam protection
+
+The Worker applies several low-friction checks before saving a request or notifying the owner:
+
+- hidden honeypot field
+- minimum form-completion time
+- bounded field lengths and email validation
+- repeated-submission limit of five requests per hashed IP address per 15 minutes
+- screening for obvious marketing solicitations disguised as reservations
+- screening for identical pickup and destination outside hourly-service requests
+
+Blocked submissions receive a neutral accepted response so automated senders do not get useful tuning feedback. Only a reason and timestamp are retained for blocked submissions; raw IP addresses and submitted contact details are not stored in the security log.
 
 Analytics hooks are included for booking clicks, phone clicks, estimate-to-booking clicks, reservation attempts, reservation successes, and reservation errors. If Google Analytics `gtag` or Cloudflare Zaraz is present, the browser sends those events there. The site also sends lightweight first-party events to `/api/track`; if `RESERVATIONS` exists, those events are stored for 90 days without customer contact details.
 

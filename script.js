@@ -1,13 +1,13 @@
 const serviceContent = {
   airport: {
     tag: "Airport Transfers",
-    title: "Make catching a flight feel boring again.",
+    title: "Start your airport trip with a confirmed pickup time.",
     copy:
       "Schedule direct service between Chapel Hill, Carrboro, Durham, Raleigh, and RDU with planned pickup times and room for luggage.",
   },
   medical: {
     tag: "Medical & Senior Rides",
-    title: "Give families a dependable appointment ride.",
+    title: "Dependable rides for appointments and senior travel.",
     copy:
       "Reserved pickup windows, patient drivers, clean cars, and direct communication help families plan appointments with less stress.",
   },
@@ -213,6 +213,7 @@ function upgradeReservationForm() {
   reservationForm.setAttribute("method", "post");
   reservationForm.innerHTML = `
     <input class="hidden-field" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
+    <input type="hidden" name="form-started-at" value="" />
     <div class="form-grid">
       <label>Name<input type="text" name="name" autocomplete="name" placeholder="Your name" required /></label>
       <label>Phone<input type="tel" name="phone" autocomplete="tel" placeholder="Best phone number" required /></label>
@@ -235,16 +236,12 @@ function upgradeReservationForm() {
   const campaign = new URLSearchParams(window.location.search).get("campaign");
   const campaignField = reservationForm.elements.namedItem("campaign");
   if (campaign && campaignField) campaignField.setAttribute("value", campaign.slice(0, 100));
+  const startedAtField = reservationForm.elements.namedItem("form-started-at");
+  if (startedAtField) startedAtField.value = String(Date.now());
 }
 
 function polishLiveContent() {
   addLiveStyles();
-  document
-    .querySelectorAll('img[src="assets/airport-service.png"], img[src$="/assets/airport-service.png"]')
-    .forEach((image) => {
-      image.src = reliableRouteImage;
-    });
-
   const heroButton = document.querySelector(".hero .button.primary");
   if (heroButton) heroButton.textContent = "Book RDU Airport Ride";
 
@@ -252,10 +249,10 @@ function polishLiveContent() {
   if (routeEyebrow) routeEyebrow.textContent = "Popular Routes";
 
   const routeHeading = document.querySelector("#routes-title");
-  if (routeHeading) routeHeading.textContent = "Reserve reliable transportation on the routes local travelers use most.";
+  if (routeHeading) routeHeading.textContent = "Popular airport and local routes.";
 
   const newsHeading = document.querySelector("#news-title");
-  if (newsHeading) newsHeading.textContent = "Helpful Chapel Hill travel articles for planning local rides.";
+  if (newsHeading) newsHeading.textContent = "Road, airport, campus, and event updates for Triangle travelers.";
 
   const newsSection = document.querySelector("#news");
   const newsSectionHeading = newsSection?.querySelector(".section-heading");
@@ -297,7 +294,7 @@ function polishLiveContent() {
     }
     if (!links.querySelector("a[href*='facebook.com']")) {
       const facebook = document.createElement("a");
-      facebook.href = "https://www.facebook.com/share/17hQheN4bK/?mibextid=wwXIfr";
+      facebook.href = "https://www.facebook.com/carolinasedan";
       facebook.target = "_blank";
       facebook.rel = "noopener";
       facebook.textContent = "Facebook";
@@ -305,7 +302,7 @@ function polishLiveContent() {
     }
     if (!links.querySelector("a[href*='x.com/carolinasedan36']")) {
       const x = document.createElement("a");
-      x.href = "https://x.com/carolinasedan36?s=21&t=4jFG8iXkR-U6dBxISFHjPA";
+      x.href = "https://x.com/carolinasedan36";
       x.target = "_blank";
       x.rel = "noopener";
       x.textContent = "X";
@@ -379,6 +376,8 @@ function showReservationSuccess(result, form) {
     rideType: getFormValue(new FormData(form), "ride-type"),
   });
   form.reset();
+  const startedAtField = form.elements.namedItem("form-started-at");
+  if (startedAtField) startedAtField.value = String(Date.now());
 
   if (statusUrl && result.storageConnected) {
     const destination = new URL(statusUrl, window.location.origin);
@@ -448,3 +447,8 @@ reservationForm?.addEventListener("submit", (event) => {
       if (submit) submit.disabled = false;
     });
 });
+
+const initialStartedAtField = reservationForm?.elements.namedItem("form-started-at");
+if (initialStartedAtField && !initialStartedAtField.value) {
+  initialStartedAtField.value = String(Date.now());
+}

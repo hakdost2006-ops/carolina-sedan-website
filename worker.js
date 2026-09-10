@@ -14,6 +14,11 @@ const ADMIN_STATUSES = new Set([
 const PAYMENT_STATUSES = new Set(["not-requested", "payment-link-sent", "paid", "pay-on-ride", "refunded"]);
 const CANONICAL_HOST = "www.carolinasedan.com";
 const CANONICAL_ORIGIN = `https://${CANONICAL_HOST}`;
+const RESERVATION_TTL = 60 * 60 * 24 * 180;
+const RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
+const RATE_LIMIT_MAX_SUBMISSIONS = 5;
+const NOTIFICATION_LOG_LIMIT = 20;
+const CONFIRMATION_COOLDOWN_SECONDS = 5 * 60;
 
 const LEGACY_REDIRECTS = {
   "/blog": "/news",
@@ -77,7 +82,6 @@ const STATIC_FILES = new Set([
   "/script.js",
   "/styles.css",
   "/team.css",
-  "/assets/airport-service.png",
   "/assets/carolina-lexus.jpeg",
   "/assets/carolina-sedan-logo.jpeg",
   "/assets/chauffeur-hero.jpg",
@@ -89,7 +93,10 @@ const STATIC_FILES = new Set([
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8" },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
   });
 }
 
@@ -114,9 +121,89 @@ function clean(value) {
   return String(value || "").trim();
 }
 
+function cleanLimit(value, length) {
+  return clean(value).slice(0, length);
+}
+
+function isValidEmail(value) {
+  const email = clean(value);
+  return !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function normalizeAddress(value) {
+  return clean(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+async function hashValue(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function looksLikeSolicitation(formData) {
+  const content = [formData.get("details"), formData.get("name"), formData.get("pickup-address")]
+    .map((value) => clean(value).toLowerCase())
+    .join(" ");
+  const signals = [
+    /\bai (agent|assistant|implementation)\b/,
+    /\b(marketing|seo|lead generation) (agency|service|services|offer|solution|solutions)?\b/,
+    /\b(schedule|book|grab) (a )?(call|chat|demo|meeting)\b/,
+    /\b(money back|full refund|guaranteed return)\b/,
+    /\bwe (can|help|build|made|created|set up).{0,50}\b(your business|your website|more customers|more leads)\b/,
+    /\bunsubscribe\b/,
+  ];
+
+  return signals.filter((pattern) => pattern.test(content)).length >= 2;
+}
+
+function isImplausibleRoute(formData) {
+  const rideType = clean(formData.get("ride-type")).toLowerCase();
+  if (rideType === "hourly service") return false;
+  const pickup = normalizeAddress(formData.get("pickup-address"));
+  const destination = normalizeAddress(formData.get("destination-address"));
+  return pickup.length >= 8 && pickup === destination;
+}
+
+function wasSubmittedTooQuickly(formData) {
+  const startedAt = Number(clean(formData.get("form-started-at")));
+  if (!Number.isFinite(startedAt) || startedAt <= 0) return false;
+  const elapsed = Date.now() - startedAt;
+  return elapsed >= 0 && elapsed < 2500;
+}
+
+async function exceedsSubmissionRate(request, env) {
+  const ip = clean(request.headers.get("cf-connecting-ip"));
+  if (!ip || !env.RESERVATIONS) return false;
+
+  const bucket = Math.floor(Date.now() / (RATE_LIMIT_WINDOW_SECONDS * 1000));
+  const ipHash = (await hashValue(ip)).slice(0, 24);
+  const key = `security:rate:${bucket}:${ipHash}`;
+  const existing = Number((await env.RESERVATIONS.get(key)) || 0);
+  await env.RESERVATIONS.put(key, String(existing + 1), {
+    expirationTtl: RATE_LIMIT_WINDOW_SECONDS * 2,
+  });
+  return existing >= RATE_LIMIT_MAX_SUBMISSIONS;
+}
+
+async function recordBlockedSubmission(env, reason) {
+  if (!env.RESERVATIONS) return;
+  await env.RESERVATIONS.put(
+    `security:blocked:${Date.now()}:${crypto.randomUUID()}`,
+    JSON.stringify({ reason, createdAt: new Date().toISOString() }),
+    { expirationTtl: 60 * 60 * 24 * 30 }
+  );
+}
+
+async function silentlyBlockSubmission(env, reason) {
+  await recordBlockedSubmission(env, reason);
+  return json({ ok: true, accepted: true }, 202);
+}
+
 function cleanMoney(value) {
-  const cleaned = clean(value).replace(/[^0-9.]/g, "");
-  if (!cleaned) return "";
+  const cleaned = clean(value).replace(/[$,\s]/g, "");
+  if (!/^\d+(?:\.\d{1,2})?$/.test(cleaned)) return "";
+  const amount = Number(cleaned);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 100000) return "";
   return cleaned;
 }
 
@@ -194,8 +281,8 @@ function buildReservation(formData, request) {
   const id = makeReservationId();
   const pickupTime = clean(formData.get("pickup-time"));
   const legacyContact = clean(formData.get("contact"));
-  const phone = clean(formData.get("phone")) || legacyContact;
-  const email = clean(formData.get("email")) || (legacyContact.includes("@") ? legacyContact : "");
+  const phone = cleanLimit(clean(formData.get("phone")) || legacyContact, 40);
+  const email = cleanLimit(clean(formData.get("email")) || (legacyContact.includes("@") ? legacyContact : ""), 254);
 
   return {
     id,
@@ -203,21 +290,21 @@ function buildReservation(formData, request) {
     paymentStatus: "not-requested",
     createdAt: new Date().toISOString(),
     trackingUrl: getTrackingUrl(request, id),
-    name: clean(formData.get("name")),
+    name: cleanLimit(formData.get("name"), 100),
     phone,
     email,
     contact: [phone, email].filter(Boolean).join(" | "),
-    rideType: clean(formData.get("ride-type")) || "Reservation request",
-    leadSource: clean(formData.get("lead-source")) || "Not provided",
+    rideType: cleanLimit(formData.get("ride-type"), 80) || "Reservation request",
+    leadSource: cleanLimit(formData.get("lead-source"), 80) || "Not provided",
     campaign: getCampaign(formData.get("campaign"), request),
     pickupTime,
     pickupTimeLabel: formatPickupTime(pickupTime),
-    pickupAddress: clean(formData.get("pickup-address")),
-    destinationAddress: clean(formData.get("destination-address")),
-    passengers: clean(formData.get("passengers")) || "1",
-    luggage: clean(formData.get("luggage")),
-    flightNumber: clean(formData.get("flight-number")),
-    details: clean(formData.get("details")),
+    pickupAddress: cleanLimit(formData.get("pickup-address"), 300),
+    destinationAddress: cleanLimit(formData.get("destination-address"), 300),
+    passengers: cleanLimit(formData.get("passengers"), 3) || "1",
+    luggage: cleanLimit(formData.get("luggage"), 160),
+    flightNumber: cleanLimit(formData.get("flight-number"), 80),
+    details: cleanLimit(formData.get("details"), 2000),
   };
 }
 
@@ -289,7 +376,85 @@ async function sendEmail(env, data, message) {
   });
 
   if (!response.ok) throw new Error(`Email send failed: ${await response.text()}`);
-  return { sent: true };
+  const result = await response.json().catch(() => ({}));
+  return { sent: true, messageId: clean(result.id) };
+}
+
+function customerFirstName(name) {
+  return clean(name).split(/\s+/)[0] || "there";
+}
+
+function paymentInstructions(reservation) {
+  if (reservation.paymentStatus === "paid") return ["Payment status: Paid"];
+  if (reservation.paymentStatus === "refunded") return ["Payment status: Refunded"];
+  if (reservation.paymentStatus === "pay-on-ride") {
+    return ["Payment: Pay during the ride using the payment method arranged with Carolina Sedan."];
+  }
+  if (reservation.paymentLink) {
+    return ["Payment link:", reservation.paymentLink];
+  }
+  return ["Payment: Carolina Sedan will provide payment instructions separately."];
+}
+
+function buildCustomerConfirmation(reservation) {
+  const lines = [
+    `Dear ${customerFirstName(reservation.name)},`,
+    "",
+    "Your Carolina Sedan reservation is confirmed after our availability review.",
+    "",
+    `Reservation ID: ${reservation.id}`,
+    `Ride type: ${reservation.rideType}`,
+    `Pickup date/time: ${reservation.pickupTimeLabel}`,
+    `Pickup: ${reservation.pickupAddress}`,
+    `Destination: ${reservation.destinationAddress}`,
+    `Passengers: ${reservation.passengers}`,
+  ];
+
+  if (reservation.flightNumber) lines.push(`Flight: ${reservation.flightNumber}`);
+  if (reservation.driverName) lines.push(`Driver: ${reservation.driverName}`);
+  lines.push(`Confirmed price: $${reservation.quotedPrice}`);
+  lines.push(...paymentInstructions(reservation));
+  if (reservation.customerMessage) lines.push("", "Additional information:", reservation.customerMessage);
+  lines.push(
+    "",
+    "View the current reservation status:",
+    reservation.trackingUrl,
+    "",
+    "Please reply to this email or call 919-924-0568 if any flight, passenger, luggage, pickup, or destination details change.",
+    "",
+    "Carolina Sedan Service",
+    "919-924-0568",
+    "booking@carolinasedan.com"
+  );
+  return lines.join("\n");
+}
+
+async function sendCustomerConfirmation(env, reservation) {
+  const apiKey = clean(env.RESEND_API_KEY);
+  if (!apiKey) throw new Error("RESEND_API_KEY is not configured.");
+  if (!isValidEmail(reservation.email) || !reservation.email) {
+    throw new Error("This reservation does not have a valid customer email address.");
+  }
+
+  const fromEmail = clean(env.RESERVATION_FROM_EMAIL) || DEFAULT_FROM_EMAIL;
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to: [reservation.email],
+      subject: `Reservation confirmed | ${reservation.id} | Carolina Sedan`,
+      text: buildCustomerConfirmation(reservation),
+      reply_to: DEFAULT_TO_EMAIL,
+    }),
+  });
+
+  if (!response.ok) throw new Error(`Customer email failed: ${await response.text()}`);
+  const result = await response.json().catch(() => ({}));
+  return { sent: true, messageId: clean(result.id) };
 }
 
 async function sendSms(env, message) {
@@ -328,7 +493,7 @@ async function saveReservation(env, reservation) {
   }
 
   await env.RESERVATIONS.put(`reservation:${reservation.id}`, JSON.stringify(reservation), {
-    expirationTtl: 60 * 60 * 24 * 180,
+    expirationTtl: RESERVATION_TTL,
     metadata: {
       createdAt: reservation.createdAt,
       status: reservation.status,
@@ -380,6 +545,57 @@ function publicReservation(reservation) {
   };
 }
 
+function updateFields(existing, input, { confirm = false } = {}) {
+  const requestedStatus = confirm ? "confirmed" : clean(input.status);
+  const status = requestedStatus || existing.status || "pending-confirmation";
+  let paymentStatus = clean(input.paymentStatus) || existing.paymentStatus || "not-requested";
+  const rawPaymentLink = hasField(input, "paymentLink") ? clean(input.paymentLink) : existing.paymentLink || "";
+  const paymentLink = safeUrl(rawPaymentLink);
+  const rawQuotedPrice = hasField(input, "quotedPrice") ? clean(input.quotedPrice) : existing.quotedPrice || "";
+  const quotedPrice = cleanMoney(rawQuotedPrice);
+
+  if (!ADMIN_STATUSES.has(status)) throw new Error("Invalid reservation status.");
+  if (!PAYMENT_STATUSES.has(paymentStatus)) throw new Error("Invalid payment status.");
+  if (rawQuotedPrice && !quotedPrice) throw new Error("Quoted price must be a valid positive amount.");
+  if (rawPaymentLink && !paymentLink) throw new Error("Payment link must be a valid https:// address.");
+  if (confirm && paymentLink && ["not-requested", "payment-link-sent"].includes(paymentStatus)) {
+    paymentStatus = "payment-link-sent";
+  }
+  if (paymentStatus === "payment-link-sent" && !paymentLink) {
+    throw new Error("Add a payment link before selecting payment link sent.");
+  }
+
+  const updatedAt = new Date().toISOString();
+  const updated = {
+    ...existing,
+    status,
+    paymentStatus,
+    quotedPrice,
+    paymentLink,
+    driverName: hasField(input, "driverName") ? cleanLimit(input.driverName, 100) : existing.driverName || "",
+    customerMessage: hasField(input, "customerMessage")
+      ? cleanLimit(input.customerMessage, 2000)
+      : existing.customerMessage || "",
+    adminNotes: hasField(input, "adminNotes") ? cleanLimit(input.adminNotes, 4000) : existing.adminNotes || "",
+    updatedAt,
+  };
+
+  if (status === "confirmed" && !updated.confirmedAt) updated.confirmedAt = updatedAt;
+  if (status === "declined" && !updated.declinedAt) updated.declinedAt = updatedAt;
+  if (status === "completed" && !updated.completedAt) updated.completedAt = updatedAt;
+  if (status === "canceled" && !updated.canceledAt) updated.canceledAt = updatedAt;
+  return updated;
+}
+
+function appendNotification(reservation, entry) {
+  const notificationLog = Array.isArray(reservation.notificationLog) ? reservation.notificationLog : [];
+  return {
+    ...reservation,
+    notificationLog: [...notificationLog, entry].slice(-NOTIFICATION_LOG_LIMIT),
+    lastConfirmationEmail: entry,
+  };
+}
+
 async function listReservations(request, env) {
   const auth = requireAdmin(request, env);
   if (!auth.ok) return auth.response;
@@ -418,31 +634,15 @@ async function updateReservation(request, env) {
   const existing = await env.RESERVATIONS.get(`reservation:${id}`, "json");
   if (!existing) return json({ error: "Reservation was not found." }, 404);
 
-  const status = clean(input.status) || existing.status || "pending-confirmation";
-  const paymentStatus = clean(input.paymentStatus) || existing.paymentStatus || "not-requested";
-
-  if (!ADMIN_STATUSES.has(status)) return json({ error: "Invalid reservation status." }, 400);
-  if (!PAYMENT_STATUSES.has(paymentStatus)) return json({ error: "Invalid payment status." }, 400);
-
-  const updated = {
-    ...existing,
-    status,
-    paymentStatus,
-    quotedPrice: hasField(input, "quotedPrice") ? cleanMoney(input.quotedPrice) : existing.quotedPrice || "",
-    paymentLink: hasField(input, "paymentLink") ? safeUrl(input.paymentLink) : existing.paymentLink || "",
-    driverName: hasField(input, "driverName") ? clean(input.driverName) : existing.driverName || "",
-    customerMessage: hasField(input, "customerMessage") ? clean(input.customerMessage) : existing.customerMessage || "",
-    adminNotes: hasField(input, "adminNotes") ? clean(input.adminNotes) : existing.adminNotes || "",
-    updatedAt: new Date().toISOString(),
-  };
-
-  if (status === "confirmed" && !updated.confirmedAt) updated.confirmedAt = updated.updatedAt;
-  if (status === "declined" && !updated.declinedAt) updated.declinedAt = updated.updatedAt;
-  if (status === "completed" && !updated.completedAt) updated.completedAt = updated.updatedAt;
-  if (status === "canceled" && !updated.canceledAt) updated.canceledAt = updated.updatedAt;
+  let updated;
+  try {
+    updated = updateFields(existing, input);
+  } catch (error) {
+    return json({ error: error.message }, 400);
+  }
 
   await env.RESERVATIONS.put(`reservation:${id}`, JSON.stringify(updated), {
-    expirationTtl: 60 * 60 * 24 * 180,
+    expirationTtl: RESERVATION_TTL,
     metadata: {
       createdAt: updated.createdAt,
       status: updated.status,
@@ -453,6 +653,104 @@ async function updateReservation(request, env) {
   });
 
   return json({ ok: true, reservation: updated });
+}
+
+async function confirmAndEmailReservation(request, env) {
+  const auth = requireAdmin(request, env);
+  if (!auth.ok) return auth.response;
+  if (!env.RESERVATIONS) return json({ error: "RESERVATIONS KV binding is not configured." }, 503);
+
+  let input;
+  try {
+    input = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON body." }, 400);
+  }
+
+  const id = clean(input.id).toUpperCase();
+  if (!id) return json({ error: "Reservation ID is required." }, 400);
+  const existing = await env.RESERVATIONS.get(`reservation:${id}`, "json");
+  if (!existing) return json({ error: "Reservation was not found." }, 404);
+  if (!existing.email || !isValidEmail(existing.email)) {
+    return json({ error: "Add a valid customer email before sending confirmation." }, 400);
+  }
+
+  const requestId = clean(input.notificationRequestId).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 100);
+  if (!requestId) return json({ error: "A notification request ID is required." }, 400);
+  const previous = (existing.notificationLog || []).find((entry) => entry.requestId === requestId);
+  if (previous?.status === "sent") {
+    return json({ ok: true, alreadySent: true, reservation: existing, email: previous });
+  }
+  const lastSentAt = Date.parse(existing.lastConfirmationEmail?.sentAt || "");
+  if (
+    existing.lastConfirmationEmail?.status === "sent" &&
+    Number.isFinite(lastSentAt) &&
+    Date.now() - lastSentAt < CONFIRMATION_COOLDOWN_SECONDS * 1000
+  ) {
+    return json(
+      { error: "A confirmation email was sent recently. Wait five minutes before sending another." },
+      409
+    );
+  }
+
+  let confirmed;
+  try {
+    confirmed = updateFields(existing, input, { confirm: true });
+  } catch (error) {
+    return json({ error: error.message }, 400);
+  }
+  if (!confirmed.quotedPrice) return json({ error: "Enter a quoted price before sending confirmation." }, 400);
+
+  const startedAt = new Date().toISOString();
+  let pending = appendNotification(confirmed, {
+    type: "confirmation-email",
+    requestId,
+    status: "sending",
+    createdAt: startedAt,
+  });
+  await saveReservation(env, pending);
+
+  try {
+    const result = await sendCustomerConfirmation(env, pending);
+    const sentAt = new Date().toISOString();
+    const sentEntry = {
+      type: "confirmation-email",
+      requestId,
+      status: "sent",
+      createdAt: startedAt,
+      sentAt,
+      messageId: result.messageId,
+    };
+    const log = (pending.notificationLog || []).filter((entry) => entry.requestId !== requestId);
+    pending = {
+      ...pending,
+      notificationLog: [...log, sentEntry].slice(-NOTIFICATION_LOG_LIMIT),
+      lastConfirmationEmail: sentEntry,
+      confirmationEmailSentAt: sentAt,
+      updatedAt: sentAt,
+    };
+    await saveReservation(env, pending);
+    return json({ ok: true, reservation: pending, email: sentEntry });
+  } catch (error) {
+    const failedAt = new Date().toISOString();
+    const failedEntry = {
+      type: "confirmation-email",
+      requestId,
+      status: "failed",
+      createdAt: startedAt,
+      failedAt,
+      error: cleanLimit(error.message, 500),
+    };
+    const log = (pending.notificationLog || []).filter((entry) => entry.requestId !== requestId);
+    pending = {
+      ...pending,
+      notificationLog: [...log, failedEntry].slice(-NOTIFICATION_LOG_LIMIT),
+      lastConfirmationEmail: failedEntry,
+      updatedAt: failedAt,
+    };
+    await saveReservation(env, pending);
+    return json({ error: failedEntry.error, reservation: pending }, 502);
+  }
 }
 
 async function handleAdminReservations(request, env) {
@@ -539,10 +837,17 @@ async function handleReservation(request, env) {
     return json({ error: "Invalid form submission." }, 400);
   }
 
-  if (clean(formData.get("website"))) return json({ ok: true });
+  if (clean(formData.get("website"))) return silentlyBlockSubmission(env, "honeypot");
+  if (wasSubmittedTooQuickly(formData)) return silentlyBlockSubmission(env, "timing");
+  if (looksLikeSolicitation(formData)) return silentlyBlockSubmission(env, "solicitation");
+  if (isImplausibleRoute(formData)) return silentlyBlockSubmission(env, "same-route");
+  if (await exceedsSubmissionRate(request, env)) return silentlyBlockSubmission(env, "rate-limit");
 
   const missing = REQUIRED_FIELDS.filter((field) => !clean(formData.get(field)));
   if (missing.length > 0) return json({ error: "Please complete all required fields." }, 400);
+
+  const submittedEmail = clean(formData.get("email"));
+  if (!isValidEmail(submittedEmail)) return json({ error: "Please enter a valid email address." }, 400);
 
   const data = buildReservation(formData, request);
   const message = buildMessage(data);
@@ -620,6 +925,11 @@ export default {
 
     if (pathname === "/api/admin/reservations") {
       return handleAdminReservations(request, env);
+    }
+
+    if (pathname === "/api/admin/reservations/confirmation") {
+      if (request.method !== "POST") return json({ error: "Use POST to send a confirmation email." }, 405);
+      return confirmAndEmailReservation(request, env);
     }
 
     if (pathname === "/api/track") {

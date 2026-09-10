@@ -3,3 +3,6 @@
 node_modules/
 *.zip
 *.log
+tests/
+test-reservation.html
+assets/airport-service.png
