@@ -23,7 +23,7 @@
   "assets": {
     "directory": "./",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/assets/*"],
+    "run_worker_first": ["/*", "!/assets/*", "!/styles.css", "!/team.css", "!/script.js"],
     "not_found_handling": "none"
   }
 }

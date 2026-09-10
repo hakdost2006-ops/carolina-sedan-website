@@ -152,6 +152,11 @@ for (const page of pages.values()) {
 }
 
 const worker = await readFile(path.join(root, "worker.js"), "utf8");
+const wrangler = JSON.parse(await readFile(path.join(root, "wrangler.jsonc"), "utf8"));
+const workerFirstRoutes = wrangler.assets?.run_worker_first;
+if (!Array.isArray(workerFirstRoutes) || !workerFirstRoutes.includes("/*")) {
+  report(errors, "wrangler.jsonc", "HTML and unknown paths can bypass canonical redirects and the Worker allowlist");
+}
 const pageRouteBlock = firstMatch(worker, /const PAGE_ROUTES = \{([\s\S]*?)\n\};/);
 const workerRoutes = new Map(
   [...pageRouteBlock.matchAll(/"(\/[^"\n]*)"\s*:\s*"(\/[^"\n]+\.html)"/g)].map((match) => [match[1], match[2]])
