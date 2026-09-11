@@ -47,6 +47,7 @@ for (const file of htmlFiles) {
     /<meta\s+name=["']robots["']\s+content=["']([^"']+)["']/i
   ).toLowerCase();
   const h1Count = (html.match(/<h1\b/gi) || []).length;
+  const primaryNavigation = firstMatch(html, /<nav(?:\s[^>]*)?>([\s\S]*?)<\/nav>/i);
   const icon = firstMatch(
     html,
     /<link\s+rel=["']icon["']\s+href=["']([^"']+)["']/i
@@ -60,6 +61,11 @@ for (const file of htmlFiles) {
   if (!icon) report(errors, file, "missing site icon");
   if (!noindex && !description) report(errors, file, "missing meta description");
   if (!canonical && file !== "test-reservation.html") report(errors, file, "missing canonical URL");
+  if (!["admin.html", "test-reservation.html"].includes(file)) {
+    if (!/href=["']\/event-transportation-triangle["'][^>]*>Events<\/a>/i.test(primaryNavigation)) {
+      report(errors, file, "primary navigation is missing the Events link");
+    }
+  }
   if (canonical) {
     if (!canonical.startsWith("https://www.carolinasedan.com/")) {
       report(errors, file, `canonical is outside the preferred HTTPS www origin: ${canonical}`);
