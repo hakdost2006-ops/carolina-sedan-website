@@ -44,6 +44,7 @@ const PAGE_ROUTES = {
   "/chapel-hill-carrboro-dex-fest-travel-update-2026":
     "/chapel-hill-carrboro-dex-fest-travel-update-2026.html",
   "/corporate-transportation-rtp": "/corporate-transportation-rtp.html",
+  "/duke-ornl-workshop-transportation-2026": "/duke-ornl-workshop-transportation-2026.html",
   "/duke-family-weekend-transportation-2026": "/duke-family-weekend-transportation-2026.html",
   "/durham-black-car-rdu-transportation": "/durham-black-car-rdu-transportation.html",
   "/durham-duke-street-closure-detours-2026": "/durham-duke-street-closure-detours-2026.html",
