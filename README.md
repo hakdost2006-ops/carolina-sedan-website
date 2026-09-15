@@ -23,9 +23,9 @@ Required Cloudflare secret:
 
 Square payment-link secrets and variable, required only when the owner enables Square:
 
-- `SQUARE_ACCESS_TOKEN` (secret; production token from the Square Developer Console)
-- `SQUARE_LOCATION_ID` (secret)
-- `SQUARE_ENVIRONMENT=production` (text; use `sandbox` for non-production testing)
+- `SQUARE_ACCESS_TOKEN` (secret; use the Sandbox token during testing and the Production token only after owner approval)
+- `SQUARE_LOCATION_ID` (secret; it must belong to the same Square environment as the token)
+- `SQUARE_ENVIRONMENT=sandbox` (text; change to `production` only after the sandbox workflow passes and the owner approves live payments)
 
 Optional Cloudflare variables:
 
