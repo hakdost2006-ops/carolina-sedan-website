@@ -97,7 +97,7 @@
         const receivedMessage = justSubmitted
           ? `<p class="queue-note"><strong>Reservation request received.</strong><br />Save this page or reservation number so you can return to the latest status.</p>`
           : "";
-        const paymentLink = reservation.paymentLink
+        const paymentLink = reservation.paymentStatus === "payment-link-sent" && reservation.paymentLink
           ? `<p><a class="button primary" href="${escapeHtml(reservation.paymentLink)}" target="_blank" rel="noopener">Open payment link</a></p>`
           : "";
         const customerMessage = reservation.customerMessage

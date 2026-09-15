@@ -19,6 +19,7 @@ const RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
 const RATE_LIMIT_MAX_SUBMISSIONS = 5;
 const NOTIFICATION_LOG_LIMIT = 20;
 const CONFIRMATION_COOLDOWN_SECONDS = 5 * 60;
+const SQUARE_API_VERSION = "2026-08-19";
 
 const LEGACY_REDIRECTS = {
   "/blog": "/news",
@@ -222,6 +223,13 @@ function cleanMoney(value) {
   return cleaned;
 }
 
+function moneyToCents(value) {
+  const amount = cleanMoney(value);
+  if (!amount) return 0;
+  const [dollars, cents = ""] = amount.split(".");
+  return Number(dollars) * 100 + Number(cents.padEnd(2, "0"));
+}
+
 function safeUrl(value) {
   const url = clean(value);
   if (!url) return "";
@@ -232,6 +240,13 @@ function safeUrl(value) {
   } catch {
     return "";
   }
+}
+
+function safeSquareUrl(value) {
+  const url = safeUrl(value);
+  if (!url) return "";
+  const hostname = new URL(url).hostname.toLowerCase();
+  return ["square.link", "sandbox.square.link", "checkout.square.site"].includes(hostname) ? url : "";
 }
 
 function hasField(object, key) {
@@ -405,7 +420,7 @@ function paymentInstructions(reservation) {
   if (reservation.paymentStatus === "pay-on-ride") {
     return ["Payment: Pay during the ride using the payment method arranged with Carolina Sedan."];
   }
-  if (reservation.paymentLink) {
+  if (reservation.paymentStatus === "payment-link-sent" && reservation.paymentLink) {
     return ["Payment link:", reservation.paymentLink];
   }
   return ["Payment: Carolina Sedan will provide payment instructions separately."];
@@ -468,6 +483,64 @@ async function sendCustomerConfirmation(env, reservation) {
   });
 
   if (!response.ok) throw new Error(`Customer email failed: ${await response.text()}`);
+  const result = await response.json().catch(() => ({}));
+  return { sent: true, messageId: clean(result.id) };
+}
+
+function buildCustomerPaymentRequest(reservation) {
+  const lines = [
+    `Dear ${customerFirstName(reservation.name)},`,
+    "",
+    "A payment request is ready for your confirmed Carolina Sedan reservation.",
+    "",
+    `Reservation ID: ${reservation.id}`,
+    `Ride type: ${reservation.rideType}`,
+    `Pickup date/time: ${reservation.pickupTimeLabel}`,
+    `Pickup: ${reservation.pickupAddress}`,
+    `Destination: ${reservation.destinationAddress}`,
+    `Amount due: $${reservation.quotedPrice}`,
+    "",
+    "Payment link:",
+    reservation.paymentLink,
+    "",
+    "Your reservation is not marked paid until Carolina Sedan verifies the payment with the payment provider.",
+    "",
+    "View the current reservation status:",
+    reservation.trackingUrl,
+    "",
+    "Please reply to this email or call 919-924-0568 if you have any questions before paying.",
+    "",
+    "Carolina Sedan Service",
+    "919-924-0568",
+    "booking@carolinasedan.com",
+  ];
+  return lines.join("\n");
+}
+
+async function sendCustomerPaymentRequest(env, reservation) {
+  const apiKey = clean(env.RESEND_API_KEY);
+  if (!apiKey) throw new Error("RESEND_API_KEY is not configured.");
+  if (!isValidEmail(reservation.email) || !reservation.email) {
+    throw new Error("This reservation does not have a valid customer email address.");
+  }
+
+  const fromEmail = clean(env.RESERVATION_FROM_EMAIL) || DEFAULT_FROM_EMAIL;
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to: [reservation.email],
+      subject: `Payment request | ${reservation.id} | Carolina Sedan`,
+      text: buildCustomerPaymentRequest(reservation),
+      reply_to: DEFAULT_TO_EMAIL,
+    }),
+  });
+
+  if (!response.ok) throw new Error(`Payment request email failed: ${await response.text()}`);
   const result = await response.json().catch(() => ({}));
   return { sent: true, messageId: clean(result.id) };
 }
@@ -554,7 +627,7 @@ function publicReservation(reservation) {
     luggage: reservation.luggage,
     flightNumber: reservation.flightNumber,
     quotedPrice: reservation.quotedPrice,
-    paymentLink: reservation.paymentLink,
+    paymentLink: reservation.paymentStatus === "payment-link-sent" ? reservation.paymentLink : "",
     driverName: reservation.driverName,
     customerMessage: reservation.customerMessage,
   };
@@ -573,9 +646,6 @@ function updateFields(existing, input, { confirm = false } = {}) {
   if (!PAYMENT_STATUSES.has(paymentStatus)) throw new Error("Invalid payment status.");
   if (rawQuotedPrice && !quotedPrice) throw new Error("Quoted price must be a valid positive amount.");
   if (rawPaymentLink && !paymentLink) throw new Error("Payment link must be a valid https:// address.");
-  if (confirm && paymentLink && ["not-requested", "payment-link-sent"].includes(paymentStatus)) {
-    paymentStatus = "payment-link-sent";
-  }
   if (paymentStatus === "payment-link-sent" && !paymentLink) {
     throw new Error("Add a payment link before selecting payment link sent.");
   }
@@ -602,12 +672,12 @@ function updateFields(existing, input, { confirm = false } = {}) {
   return updated;
 }
 
-function appendNotification(reservation, entry) {
+function appendNotification(reservation, entry, latestField) {
   const notificationLog = Array.isArray(reservation.notificationLog) ? reservation.notificationLog : [];
   return {
     ...reservation,
     notificationLog: [...notificationLog, entry].slice(-NOTIFICATION_LOG_LIMIT),
-    lastConfirmationEmail: entry,
+    [latestField]: entry,
   };
 }
 
@@ -670,6 +740,132 @@ async function updateReservation(request, env) {
   return json({ ok: true, reservation: updated });
 }
 
+function squareApiOrigin(env) {
+  const environment = clean(env.SQUARE_ENVIRONMENT).toLowerCase();
+  if (environment === "production") return "https://connect.squareup.com";
+  if (environment === "sandbox") return "https://connect.squareupsandbox.com";
+  return "";
+}
+
+function squareErrorMessage(result, status) {
+  const first = Array.isArray(result?.errors) ? result.errors[0] : null;
+  const detail = cleanLimit(first?.detail || first?.code, 240);
+  return detail
+    ? `Square could not create the payment link: ${detail}`
+    : `Square could not create the payment link (HTTP ${status}).`;
+}
+
+async function createSquarePaymentLink(request, env) {
+  const auth = requireAdmin(request, env);
+  if (!auth.ok) return auth.response;
+  if (!env.RESERVATIONS) return json({ error: "RESERVATIONS KV binding is not configured." }, 503);
+
+  let input;
+  try {
+    input = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON body." }, 400);
+  }
+
+  const id = clean(input.id).toUpperCase();
+  if (!id) return json({ error: "Reservation ID is required." }, 400);
+  const existing = await env.RESERVATIONS.get(`reservation:${id}`, "json");
+  if (!existing) return json({ error: "Reservation was not found." }, 404);
+  if (existing.status !== "confirmed") {
+    return json({ error: "Confirm the reservation before creating a Square payment link." }, 409);
+  }
+  if (["payment-link-sent", "paid", "refunded"].includes(existing.paymentStatus)) {
+    return json({ error: `Payment is already marked ${existing.paymentStatus}.` }, 409);
+  }
+
+  let prepared;
+  try {
+    prepared = updateFields(existing, {
+      ...input,
+      status: existing.status,
+      paymentStatus: existing.paymentStatus || "not-requested",
+    });
+  } catch (error) {
+    return json({ error: error.message }, 400);
+  }
+  const amount = moneyToCents(prepared.quotedPrice);
+  if (!amount) return json({ error: "Enter a quoted price before creating a Square payment link." }, 400);
+
+  const requestId = clean(input.squareRequestId).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 100);
+  if (!requestId) return json({ error: "A Square request ID is required." }, 400);
+  const previous = (existing.notificationLog || []).find(
+    (entry) => entry.type === "square-payment-link" && entry.requestId === requestId
+  );
+  if (previous?.status === "created" && existing.paymentLink) {
+    return json({ ok: true, alreadyCreated: true, reservation: existing, square: previous });
+  }
+
+  const accessToken = clean(env.SQUARE_ACCESS_TOKEN);
+  const locationId = clean(env.SQUARE_LOCATION_ID);
+  const apiOrigin = squareApiOrigin(env);
+  if (!accessToken || !locationId || !apiOrigin) {
+    return json(
+      {
+        error:
+          "Square is not configured. Add SQUARE_ACCESS_TOKEN, SQUARE_LOCATION_ID, and SQUARE_ENVIRONMENT to the Worker.",
+      },
+      503
+    );
+  }
+
+  const response = await fetch(`${apiOrigin}/v2/online-checkout/payment-links`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+      "square-version": SQUARE_API_VERSION,
+    },
+    body: JSON.stringify({
+      idempotency_key: `${id}-${requestId}`.slice(0, 192),
+      description: `Carolina Sedan reservation ${id}`,
+      payment_note: `Carolina Sedan reservation ${id}`,
+      quick_pay: {
+        name: `Carolina Sedan reservation ${id}`,
+        price_money: { amount, currency: "USD" },
+        location_id: locationId,
+      },
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) return json({ error: squareErrorMessage(result, response.status) }, 502);
+
+  const paymentLink = safeSquareUrl(result?.payment_link?.url);
+  const squarePaymentLinkId = cleanLimit(result?.payment_link?.id, 100);
+  const squareOrderId = cleanLimit(result?.payment_link?.order_id, 100);
+  if (!paymentLink || !squarePaymentLinkId || !squareOrderId) {
+    return json({ error: "Square returned an incomplete payment-link response." }, 502);
+  }
+
+  const createdAt = new Date().toISOString();
+  const entry = {
+    type: "square-payment-link",
+    requestId,
+    status: "created",
+    amount: prepared.quotedPrice,
+    createdAt,
+    paymentLinkId: squarePaymentLinkId,
+    orderId: squareOrderId,
+  };
+  const notificationLog = Array.isArray(prepared.notificationLog) ? prepared.notificationLog : [];
+  const updated = {
+    ...prepared,
+    paymentLink,
+    paymentProvider: "square",
+    squarePaymentLinkId,
+    squareOrderId,
+    squarePaymentLinkCreatedAt: createdAt,
+    notificationLog: [...notificationLog, entry].slice(-NOTIFICATION_LOG_LIMIT),
+    updatedAt: createdAt,
+  };
+  await saveReservation(env, updated);
+  return json({ ok: true, reservation: updated, square: entry });
+}
+
 async function confirmAndEmailReservation(request, env) {
   const auth = requireAdmin(request, env);
   if (!auth.ok) return auth.response;
@@ -722,7 +918,7 @@ async function confirmAndEmailReservation(request, env) {
     requestId,
     status: "sending",
     createdAt: startedAt,
-  });
+  }, "lastConfirmationEmail");
   await saveReservation(env, pending);
 
   try {
@@ -761,6 +957,125 @@ async function confirmAndEmailReservation(request, env) {
       ...pending,
       notificationLog: [...log, failedEntry].slice(-NOTIFICATION_LOG_LIMIT),
       lastConfirmationEmail: failedEntry,
+      updatedAt: failedAt,
+    };
+    await saveReservation(env, pending);
+    return json({ error: failedEntry.error, reservation: pending }, 502);
+  }
+}
+
+async function emailPaymentRequest(request, env) {
+  const auth = requireAdmin(request, env);
+  if (!auth.ok) return auth.response;
+  if (!env.RESERVATIONS) return json({ error: "RESERVATIONS KV binding is not configured." }, 503);
+
+  let input;
+  try {
+    input = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON body." }, 400);
+  }
+
+  const id = clean(input.id).toUpperCase();
+  if (!id) return json({ error: "Reservation ID is required." }, 400);
+  const existing = await env.RESERVATIONS.get(`reservation:${id}`, "json");
+  if (!existing) return json({ error: "Reservation was not found." }, 404);
+  if (existing.status !== "confirmed") {
+    return json({ error: "Confirm the reservation before sending a payment request." }, 409);
+  }
+  if (!existing.email || !isValidEmail(existing.email)) {
+    return json({ error: "Add a valid customer email before sending a payment request." }, 400);
+  }
+  if (["paid", "refunded"].includes(existing.paymentStatus)) {
+    return json({ error: `Payment is already marked ${existing.paymentStatus}.` }, 409);
+  }
+
+  const requestId = clean(input.notificationRequestId).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 100);
+  if (!requestId) return json({ error: "A notification request ID is required." }, 400);
+  const previous = (existing.notificationLog || []).find(
+    (entry) => entry.type === "payment-request-email" && entry.requestId === requestId
+  );
+  if (previous?.status === "sent") {
+    return json({ ok: true, alreadySent: true, reservation: existing, email: previous });
+  }
+  const lastSentAt = Date.parse(existing.lastPaymentRequestEmail?.sentAt || "");
+  if (
+    existing.lastPaymentRequestEmail?.status === "sent" &&
+    Number.isFinite(lastSentAt) &&
+    Date.now() - lastSentAt < CONFIRMATION_COOLDOWN_SECONDS * 1000
+  ) {
+    return json(
+      { error: "A payment request was sent recently. Wait five minutes before sending another." },
+      409
+    );
+  }
+
+  let prepared;
+  try {
+    prepared = updateFields(existing, {
+      ...input,
+      status: existing.status,
+      paymentStatus: existing.paymentStatus || "not-requested",
+    });
+  } catch (error) {
+    return json({ error: error.message }, 400);
+  }
+  if (!prepared.quotedPrice) return json({ error: "Enter a quoted price before sending a payment request." }, 400);
+  if (!prepared.paymentLink) return json({ error: "Add a valid https:// payment link before sending." }, 400);
+
+  const startedAt = new Date().toISOString();
+  let pending = appendNotification(prepared, {
+    type: "payment-request-email",
+    requestId,
+    status: "sending",
+    amount: prepared.quotedPrice,
+    createdAt: startedAt,
+  }, "lastPaymentRequestEmail");
+  await saveReservation(env, pending);
+
+  try {
+    const result = await sendCustomerPaymentRequest(env, pending);
+    const sentAt = new Date().toISOString();
+    const sentEntry = {
+      type: "payment-request-email",
+      requestId,
+      status: "sent",
+      amount: pending.quotedPrice,
+      createdAt: startedAt,
+      sentAt,
+      messageId: result.messageId,
+    };
+    const log = (pending.notificationLog || []).filter(
+      (entry) => !(entry.type === "payment-request-email" && entry.requestId === requestId)
+    );
+    pending = {
+      ...pending,
+      paymentStatus: "payment-link-sent",
+      notificationLog: [...log, sentEntry].slice(-NOTIFICATION_LOG_LIMIT),
+      lastPaymentRequestEmail: sentEntry,
+      paymentRequestEmailSentAt: sentAt,
+      updatedAt: sentAt,
+    };
+    await saveReservation(env, pending);
+    return json({ ok: true, reservation: pending, email: sentEntry });
+  } catch (error) {
+    const failedAt = new Date().toISOString();
+    const failedEntry = {
+      type: "payment-request-email",
+      requestId,
+      status: "failed",
+      amount: pending.quotedPrice,
+      createdAt: startedAt,
+      failedAt,
+      error: cleanLimit(error.message, 500),
+    };
+    const log = (pending.notificationLog || []).filter(
+      (entry) => !(entry.type === "payment-request-email" && entry.requestId === requestId)
+    );
+    pending = {
+      ...pending,
+      notificationLog: [...log, failedEntry].slice(-NOTIFICATION_LOG_LIMIT),
+      lastPaymentRequestEmail: failedEntry,
       updatedAt: failedAt,
     };
     await saveReservation(env, pending);
@@ -945,6 +1260,16 @@ export default {
     if (pathname === "/api/admin/reservations/confirmation") {
       if (request.method !== "POST") return json({ error: "Use POST to send a confirmation email." }, 405);
       return confirmAndEmailReservation(request, env);
+    }
+
+    if (pathname === "/api/admin/reservations/payment-request") {
+      if (request.method !== "POST") return json({ error: "Use POST to send a payment request." }, 405);
+      return emailPaymentRequest(request, env);
+    }
+
+    if (pathname === "/api/admin/reservations/square-link") {
+      if (request.method !== "POST") return json({ error: "Use POST to create a Square payment link." }, 405);
+      return createSquarePaymentLink(request, env);
     }
 
     if (pathname === "/api/track") {
