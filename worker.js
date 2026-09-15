@@ -43,8 +43,15 @@ const PAGE_ROUTES = {
   "/ai-summary": "/ai-summary.html",
   "/chapel-hill-carrboro-dex-fest-travel-update-2026":
     "/chapel-hill-carrboro-dex-fest-travel-update-2026.html",
+  "/cmas-conference-transportation-2026": "/cmas-conference-transportation-2026.html",
   "/corporate-transportation-rtp": "/corporate-transportation-rtp.html",
   "/duke-ornl-workshop-transportation-2026": "/duke-ornl-workshop-transportation-2026.html",
+  "/duke-immunotherapy-symposium-transportation-2026":
+    "/duke-immunotherapy-symposium-transportation-2026.html",
+  "/duke-energy-conference-transportation-2026":
+    "/duke-energy-conference-transportation-2026.html",
+  "/dicon-dason-symposium-transportation-2026":
+    "/dicon-dason-symposium-transportation-2026.html",
   "/duke-family-weekend-transportation-2026": "/duke-family-weekend-transportation-2026.html",
   "/durham-black-car-rdu-transportation": "/durham-black-car-rdu-transportation.html",
   "/durham-duke-street-closure-detours-2026": "/durham-duke-street-closure-detours-2026.html",
@@ -55,6 +62,8 @@ const PAGE_ROUTES = {
     "/juneteenth-fathers-day-weekend-travel-notes-2026.html",
   "/medical-appointment-rides": "/medical-appointment-rides.html",
   "/news": "/news.html",
+  "/nc-one-water-conference-transportation-2026":
+    "/nc-one-water-conference-transportation-2026.html",
   "/rdu-airport-transportation-chapel-hill": "/rdu-airport-transportation-chapel-hill.html",
   "/rdu-parking-time-tips-may-2026": "/rdu-parking-time-tips-may-2026.html",
   "/reservation": "/reservation.html",
@@ -63,6 +72,8 @@ const PAGE_ROUTES = {
     "/triangle-travel-advisory-july-27-august-2-2026.html",
   "/triangle-travel-update-rdu-terminal-2-raleigh-roadwork-durham-detour-may-2026":
     "/triangle-travel-update-rdu-terminal-2-raleigh-roadwork-durham-detour-may-2026.html",
+  "/triangle-placenta-symposium-transportation-2026":
+    "/triangle-placenta-symposium-transportation-2026.html",
   "/unc-baseball-super-regional-weekend-travel-2026": "/unc-baseball-super-regional-weekend-travel-2026.html",
   "/unc-department-transportation": "/unc-department-transportation.html",
   "/unc-health-championship-raleigh-ride-tips-2026": "/unc-health-championship-raleigh-ride-tips-2026.html",
@@ -72,6 +83,8 @@ const PAGE_ROUTES = {
   "/unc-notre-dame-transportation-2026": "/unc-notre-dame-transportation-2026.html",
   "/unc-water-health-conference-transportation-2026":
     "/unc-water-health-conference-transportation-2026.html",
+  "/unc-visual-discovery-conference-transportation-2026":
+    "/unc-visual-discovery-conference-transportation-2026.html",
 };
 
 const STATIC_FILES = new Set([
@@ -83,6 +96,7 @@ const STATIC_FILES = new Set([
   "/script.js",
   "/styles.css",
   "/team.css",
+  "/assets/airport-service.png",
   "/assets/carolina-lexus.jpeg",
   "/assets/carolina-sedan-logo.jpeg",
   "/assets/chauffeur-hero.jpg",
