@@ -71,6 +71,28 @@ function adminRequest(body, token = "owner-secret") {
   });
 }
 
+function paymentRequest(body, token = "owner-secret") {
+  return new Request("https://www.carolinasedan.com/api/admin/reservations/payment-request", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function squareLinkRequest(body, token = "owner-secret") {
+  return new Request("https://www.carolinasedan.com/api/admin/reservations/square-link", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
 function sampleReservation(overrides = {}) {
   return {
     id: "CSS-20260910-ABC123",
@@ -207,7 +229,7 @@ test("confirmation endpoint requires owner authentication", async () => {
   assert.equal(response.status, 401);
 });
 
-test("owner can confirm, attach payment, email once, and retain a delivery log", async () => {
+test("owner can confirm once without exposing a staged payment link", async () => {
   const kv = new MemoryKV();
   await kv.put("reservation:CSS-20260910-ABC123", JSON.stringify(sampleReservation()));
   const outbound = [];
@@ -233,13 +255,13 @@ test("owner can confirm, attach payment, email once, and retain a delivery log",
     const firstBody = await firstResponse.json();
     assert.equal(firstResponse.status, 200);
     assert.equal(firstBody.reservation.status, "confirmed");
-    assert.equal(firstBody.reservation.paymentStatus, "payment-link-sent");
+    assert.equal(firstBody.reservation.paymentStatus, "not-requested");
     assert.equal(firstBody.email.status, "sent");
     assert.equal(outbound.length, 1);
     assert.deepEqual(outbound[0].to, ["customer@example.com"]);
     assert.match(outbound[0].subject, /CSS-20260910-ABC123/);
     assert.match(outbound[0].text, /Confirmed price: \$95/);
-    assert.match(outbound[0].text, /https:\/\/pay\.example\.com\/reservation\/ABC123/);
+    assert.doesNotMatch(outbound[0].text, /https:\/\/pay\.example\.com\/reservation\/ABC123/);
 
     const stored = await kv.get("reservation:CSS-20260910-ABC123", "json");
     assert.equal(stored.lastConfirmationEmail.status, "sent");
@@ -258,6 +280,345 @@ test("owner can confirm, attach payment, email once, and retain a delivery log",
     assert.equal(differentRequest.status, 409);
     assert.match((await differentRequest.json()).error, /sent recently/i);
     assert.equal(outbound.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("payment request endpoint requires owner authentication", async () => {
+  const kv = new MemoryKV();
+  await kv.put(
+    "reservation:CSS-20260910-ABC123",
+    JSON.stringify(sampleReservation({ status: "confirmed" }))
+  );
+  const response = await worker.fetch(
+    paymentRequest({ id: "CSS-20260910-ABC123" }, "wrong-token"),
+    { RESERVATIONS: kv, ADMIN_TOKEN: "owner-secret" }
+  );
+  assert.equal(response.status, 401);
+});
+
+test("Square payment-link endpoint requires owner authentication", async () => {
+  const kv = new MemoryKV();
+  await kv.put(
+    "reservation:CSS-20260910-ABC123",
+    JSON.stringify(sampleReservation({ status: "confirmed", quotedPrice: "95" }))
+  );
+  const response = await worker.fetch(
+    squareLinkRequest({ id: "CSS-20260910-ABC123", squareRequestId: "square-1" }, "wrong-token"),
+    { RESERVATIONS: kv, ADMIN_TOKEN: "owner-secret" }
+  );
+  assert.equal(response.status, 401);
+});
+
+test("Square link requires a confirmed reservation, quote, and server configuration", async () => {
+  const kv = new MemoryKV();
+  await kv.put("reservation:CSS-20260910-ABC123", JSON.stringify(sampleReservation()));
+  const baseEnv = { RESERVATIONS: kv, ADMIN_TOKEN: "owner-secret" };
+
+  const pending = await worker.fetch(
+    squareLinkRequest({ id: "CSS-20260910-ABC123", quotedPrice: "95", squareRequestId: "square-1" }),
+    baseEnv
+  );
+  assert.equal(pending.status, 409);
+  assert.match((await pending.json()).error, /confirm the reservation/i);
+
+  await kv.put(
+    "reservation:CSS-20260910-ABC123",
+    JSON.stringify(sampleReservation({ status: "confirmed" }))
+  );
+  const missingQuote = await worker.fetch(
+    squareLinkRequest({ id: "CSS-20260910-ABC123", squareRequestId: "square-2" }),
+    baseEnv
+  );
+  assert.equal(missingQuote.status, 400);
+  assert.match((await missingQuote.json()).error, /quoted price/i);
+
+  const missingConfig = await worker.fetch(
+    squareLinkRequest({ id: "CSS-20260910-ABC123", quotedPrice: "95", squareRequestId: "square-3" }),
+    baseEnv
+  );
+  assert.equal(missingConfig.status, 503);
+  assert.match((await missingConfig.json()).error, /Square is not configured/i);
+});
+
+test("owner can create one private Square payment link for the exact quote", async () => {
+  const kv = new MemoryKV();
+  await kv.put(
+    "reservation:CSS-20260910-ABC123",
+    JSON.stringify(sampleReservation({ status: "confirmed", quotedPrice: "95.50" }))
+  );
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options, body: JSON.parse(options.body) });
+    return Response.json({
+      payment_link: {
+        id: "PLINK123",
+        order_id: "ORDER123",
+        url: "https://square.link/u/example",
+      },
+    });
+  };
+  const env = {
+    RESERVATIONS: kv,
+    ADMIN_TOKEN: "owner-secret",
+    SQUARE_ACCESS_TOKEN: "square-secret",
+    SQUARE_LOCATION_ID: "LOCATION123",
+    SQUARE_ENVIRONMENT: "production",
+  };
+  const payload = {
+    id: "CSS-20260910-ABC123",
+    quotedPrice: "95.50",
+    squareRequestId: "square-request-1",
+  };
+
+  try {
+    const response = await worker.fetch(squareLinkRequest(payload), env);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.reservation.paymentLink, "https://square.link/u/example");
+    assert.equal(body.reservation.paymentStatus, "not-requested");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "https://connect.squareup.com/v2/online-checkout/payment-links");
+    assert.equal(calls[0].options.headers.authorization, "Bearer square-secret");
+    assert.equal(calls[0].options.headers["square-version"], "2026-08-19");
+    assert.equal(calls[0].body.quick_pay.price_money.amount, 9550);
+    assert.equal(calls[0].body.quick_pay.price_money.currency, "USD");
+    assert.equal(calls[0].body.quick_pay.location_id, "LOCATION123");
+    assert.match(calls[0].body.quick_pay.name, /CSS-20260910-ABC123/);
+
+    const stored = await kv.get("reservation:CSS-20260910-ABC123", "json");
+    assert.equal(stored.paymentProvider, "square");
+    assert.equal(stored.squarePaymentLinkId, "PLINK123");
+    assert.equal(stored.squareOrderId, "ORDER123");
+    assert.equal(stored.notificationLog.at(-1).type, "square-payment-link");
+
+    const publicResponse = await worker.fetch(
+      new Request("https://www.carolinasedan.com/api/reservation?id=CSS-20260910-ABC123"),
+      env
+    );
+    assert.equal((await publicResponse.json()).reservation.paymentLink, "");
+
+    const replayResponse = await worker.fetch(squareLinkRequest(payload), env);
+    assert.equal((await replayResponse.json()).alreadyCreated, true);
+    assert.equal(calls.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Square API failure does not save a payment link or expose credentials", async () => {
+  const kv = new MemoryKV();
+  await kv.put(
+    "reservation:CSS-20260910-ABC123",
+    JSON.stringify(sampleReservation({ status: "confirmed", quotedPrice: "95" }))
+  );
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json(
+    { errors: [{ code: "UNAUTHORIZED", detail: "Access token is invalid." }] },
+    { status: 401 }
+  );
+  const env = {
+    RESERVATIONS: kv,
+    ADMIN_TOKEN: "owner-secret",
+    SQUARE_ACCESS_TOKEN: "never-show-this-token",
+    SQUARE_LOCATION_ID: "LOCATION123",
+    SQUARE_ENVIRONMENT: "sandbox",
+  };
+
+  try {
+    const response = await worker.fetch(
+      squareLinkRequest({ id: "CSS-20260910-ABC123", quotedPrice: "95", squareRequestId: "square-fail-1" }),
+      env
+    );
+    const body = await response.json();
+    assert.equal(response.status, 502);
+    assert.match(body.error, /Square could not create/i);
+    assert.doesNotMatch(body.error, /never-show-this-token/);
+
+    const stored = await kv.get("reservation:CSS-20260910-ABC123", "json");
+    assert.equal(stored.paymentLink, undefined);
+    assert.equal(stored.squareOrderId, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Square link cannot replace a link that was already sent or a paid reservation", async () => {
+  const kv = new MemoryKV();
+  const env = { RESERVATIONS: kv, ADMIN_TOKEN: "owner-secret" };
+  for (const paymentStatus of ["payment-link-sent", "paid"]) {
+    await kv.put(
+      "reservation:CSS-20260910-ABC123",
+      JSON.stringify(sampleReservation({ status: "confirmed", quotedPrice: "95", paymentStatus }))
+    );
+    const response = await worker.fetch(
+      squareLinkRequest({ id: "CSS-20260910-ABC123", quotedPrice: "95", squareRequestId: `square-${paymentStatus}` }),
+      env
+    );
+    assert.equal(response.status, 409);
+    assert.match((await response.json()).error, new RegExp(paymentStatus));
+  }
+});
+
+test("payment request cannot be sent before the ride is confirmed", async () => {
+  const kv = new MemoryKV();
+  await kv.put("reservation:CSS-20260910-ABC123", JSON.stringify(sampleReservation()));
+  const response = await worker.fetch(
+    paymentRequest({
+      id: "CSS-20260910-ABC123",
+      quotedPrice: "95",
+      paymentLink: "https://pay.example.com/reservation/ABC123",
+      notificationRequestId: "payment-notification-1",
+    }),
+    { RESERVATIONS: kv, ADMIN_TOKEN: "owner-secret", RESEND_API_KEY: "test-key" }
+  );
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /confirm the reservation/i);
+});
+
+test("owner can send one payment request and expose the link on customer status", async () => {
+  const kv = new MemoryKV();
+  await kv.put(
+    "reservation:CSS-20260910-ABC123",
+    JSON.stringify(sampleReservation({
+      status: "confirmed",
+      confirmedAt: "2026-09-12T12:00:00.000Z",
+      quotedPrice: "95",
+      paymentLink: "https://pay.example.com/reservation/ABC123",
+    }))
+  );
+  const outbound = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    outbound.push(JSON.parse(options.body));
+    return Response.json({ id: "payment-email-1" });
+  };
+  const payload = {
+    id: "CSS-20260910-ABC123",
+    quotedPrice: "95",
+    paymentLink: "https://pay.example.com/reservation/ABC123",
+    customerMessage: "Thank you for choosing Carolina Sedan.",
+    adminNotes: "Payment request approved.",
+    notificationRequestId: "payment-notification-1",
+  };
+  const env = { RESERVATIONS: kv, ADMIN_TOKEN: "owner-secret", RESEND_API_KEY: "test-key" };
+
+  try {
+    const beforeResponse = await worker.fetch(
+      new Request("https://www.carolinasedan.com/api/reservation?id=CSS-20260910-ABC123"),
+      env
+    );
+    assert.equal((await beforeResponse.json()).reservation.paymentLink, "");
+
+    const firstResponse = await worker.fetch(paymentRequest(payload), env);
+    const firstBody = await firstResponse.json();
+    assert.equal(firstResponse.status, 200);
+    assert.equal(firstBody.reservation.paymentStatus, "payment-link-sent");
+    assert.equal(firstBody.email.status, "sent");
+    assert.equal(outbound.length, 1);
+    assert.deepEqual(outbound[0].to, ["customer@example.com"]);
+    assert.match(outbound[0].subject, /Payment request.*CSS-20260910-ABC123/);
+    assert.match(outbound[0].text, /Amount due: \$95/);
+    assert.match(outbound[0].text, /https:\/\/pay\.example\.com\/reservation\/ABC123/);
+    assert.match(outbound[0].text, /not marked paid until Carolina Sedan verifies/i);
+
+    const stored = await kv.get("reservation:CSS-20260910-ABC123", "json");
+    assert.equal(stored.lastPaymentRequestEmail.status, "sent");
+    assert.equal(stored.lastPaymentRequestEmail.messageId, "payment-email-1");
+    assert.equal(stored.notificationLog.at(-1).type, "payment-request-email");
+    assert.ok(stored.paymentRequestEmailSentAt);
+
+    const afterResponse = await worker.fetch(
+      new Request("https://www.carolinasedan.com/api/reservation?id=CSS-20260910-ABC123"),
+      env
+    );
+    assert.equal(
+      (await afterResponse.json()).reservation.paymentLink,
+      "https://pay.example.com/reservation/ABC123"
+    );
+
+    const replayResponse = await worker.fetch(paymentRequest(payload), env);
+    assert.equal((await replayResponse.json()).alreadySent, true);
+    assert.equal(outbound.length, 1);
+
+    const cooldownResponse = await worker.fetch(
+      paymentRequest({ ...payload, notificationRequestId: "payment-notification-2" }),
+      env
+    );
+    assert.equal(cooldownResponse.status, 409);
+    assert.match((await cooldownResponse.json()).error, /sent recently/i);
+    assert.equal(outbound.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("payment request requires a final quote and an HTTPS payment link", async () => {
+  const kv = new MemoryKV();
+  await kv.put(
+    "reservation:CSS-20260910-ABC123",
+    JSON.stringify(sampleReservation({ status: "confirmed" }))
+  );
+  const env = { RESERVATIONS: kv, ADMIN_TOKEN: "owner-secret", RESEND_API_KEY: "test-key" };
+
+  const missingQuote = await worker.fetch(
+    paymentRequest({
+      id: "CSS-20260910-ABC123",
+      paymentLink: "https://pay.example.com/reservation/ABC123",
+      notificationRequestId: "payment-invalid-1",
+    }),
+    env
+  );
+  assert.equal(missingQuote.status, 400);
+  assert.match((await missingQuote.json()).error, /quoted price/i);
+
+  const unsafeLink = await worker.fetch(
+    paymentRequest({
+      id: "CSS-20260910-ABC123",
+      quotedPrice: "95",
+      paymentLink: "http://pay.example.com/reservation/ABC123",
+      notificationRequestId: "payment-invalid-2",
+    }),
+    env
+  );
+  assert.equal(unsafeLink.status, 400);
+  assert.match((await unsafeLink.json()).error, /https/i);
+});
+
+test("failed payment request delivery is recorded without marking payment requested", async () => {
+  const kv = new MemoryKV();
+  await kv.put(
+    "reservation:CSS-20260910-ABC123",
+    JSON.stringify(sampleReservation({ status: "confirmed" }))
+  );
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json(
+    { name: "validation_error", message: "Sender is not verified." },
+    { status: 403 }
+  );
+  const env = { RESERVATIONS: kv, ADMIN_TOKEN: "owner-secret", RESEND_API_KEY: "test-key" };
+
+  try {
+    const response = await worker.fetch(
+      paymentRequest({
+        id: "CSS-20260910-ABC123",
+        quotedPrice: "95",
+        paymentLink: "https://pay.example.com/reservation/ABC123",
+        notificationRequestId: "payment-failure-1",
+      }),
+      env
+    );
+    assert.equal(response.status, 502);
+    assert.match((await response.json()).error, /payment request email failed/i);
+
+    const stored = await kv.get("reservation:CSS-20260910-ABC123", "json");
+    assert.equal(stored.paymentStatus, "not-requested");
+    assert.equal(stored.lastPaymentRequestEmail.status, "failed");
+    assert.match(stored.lastPaymentRequestEmail.error, /sender is not verified/i);
+    assert.equal(stored.notificationLog.at(-1).type, "payment-request-email");
+    assert.equal(stored.notificationLog.at(-1).status, "failed");
   } finally {
     globalThis.fetch = originalFetch;
   }
