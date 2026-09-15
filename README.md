@@ -21,6 +21,12 @@ Required Cloudflare secret:
 - `RESEND_API_KEY`
 - `ADMIN_TOKEN` for the private `/admin` reservation queue
 
+Square payment-link secrets and variable, required only when the owner enables Square:
+
+- `SQUARE_ACCESS_TOKEN` (secret; production token from the Square Developer Console)
+- `SQUARE_LOCATION_ID` (secret)
+- `SQUARE_ENVIRONMENT=production` (text; use `sandbox` for non-production testing)
+
 Optional Cloudflare variables:
 
 - `RESERVATION_FROM_EMAIL=Carolina Sedan <booking@carolinasedan.com>`
@@ -43,7 +49,7 @@ Optional Cloudflare KV binding:
 
 Without the `RESERVATIONS` KV binding, email notifications can still work, but the status page cannot retrieve saved ride details. Add the KV namespace in Cloudflare Worker settings, bind it as `RESERVATIONS`, then redeploy.
 
-Payment collection is not part of Stage 1. Add Stripe in Stage 2 after the reservation request and tracking flow is stable.
+Payment collection is not part of Stage 1. Stage 2 uses Square-hosted checkout links so Carolina Sedan never receives or stores card details.
 
 ### Stage 2 admin queue foundation
 
@@ -57,14 +63,16 @@ The `/admin` page loads saved reservations from the `RESERVATIONS` KV binding wh
 - customer-visible message
 - private admin notes
 
-The owner has two separate actions for each reservation:
+The owner has four deliberately separate actions for each reservation:
 
-- **Save without email** updates the private queue and customer status page only.
-- **Confirm & email customer** marks the reservation confirmed and sends the approved ride details, final price, status link, and optional HTTPS payment link to the customer's email through Resend.
+- **Save privately** updates the queue and customer status page without sending email.
+- **Confirm & email customer** marks the reservation confirmed and sends the approved ride details, final price, and status link through Resend. It does not send a payment link.
+- **Create Square link** creates a one-time Square-hosted checkout link for the confirmed ride and exact quote. It stores the link privately but does not email or charge the customer.
+- **Send payment request** emails the already-created HTTPS link and only then exposes it on the customer status page.
 
-The confirmation action requires a valid customer email and final quoted price, previews the fare and payment method in a second browser confirmation, disables repeat clicks while sending, and uses a unique request ID so a retried request cannot create a duplicate email. A five-minute per-reservation cooldown blocks accidental repeat confirmations after delivery. Delivery success or failure is stored with the reservation for owner review.
+The email actions require a valid customer email and final quoted price, preview the action in a browser confirmation, disable repeat clicks while sending, and use unique request IDs so retries do not create duplicate emails. A five-minute per-reservation cooldown blocks accidental repeat deliveries. Delivery success or failure is stored with the reservation for owner review.
 
-This action does not charge the customer and does not send SMS. Payment links remain owner-created until Stripe is configured and tested.
+Square link creation requires a confirmed reservation, final quote, and owner authentication. It uses Square's idempotency support and stores the returned payment-link and order identifiers. The application does not mark the reservation paid automatically; the owner must verify payment in Square before selecting `paid`. SMS and automatic payment webhooks remain deferred.
 
 ### Reservation spam protection
 
