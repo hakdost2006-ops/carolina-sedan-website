@@ -20,6 +20,7 @@ const RATE_LIMIT_MAX_SUBMISSIONS = 5;
 const NOTIFICATION_LOG_LIMIT = 20;
 const CONFIRMATION_COOLDOWN_SECONDS = 5 * 60;
 const SQUARE_API_VERSION = "2026-08-19";
+const SQUARE_REQUEST_TIMEOUT_MS = 12_000;
 
 const LEGACY_REDIRECTS = {
   "/blog": "/news",
@@ -813,24 +814,41 @@ async function createSquarePaymentLink(request, env) {
     );
   }
 
-  const response = await fetch(`${apiOrigin}/v2/online-checkout/payment-links`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      "content-type": "application/json",
-      "square-version": SQUARE_API_VERSION,
-    },
-    body: JSON.stringify({
-      idempotency_key: `${id}-${requestId}`.slice(0, 192),
-      description: `Carolina Sedan reservation ${id}`,
-      payment_note: `Carolina Sedan reservation ${id}`,
-      quick_pay: {
-        name: `Carolina Sedan reservation ${id}`,
-        price_money: { amount, currency: "USD" },
-        location_id: locationId,
+  const timeoutMs = Math.min(
+    Math.max(Number(env.SQUARE_REQUEST_TIMEOUT_MS) || SQUARE_REQUEST_TIMEOUT_MS, 100),
+    30_000
+  );
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let response;
+  try {
+    response = await fetch(`${apiOrigin}/v2/online-checkout/payment-links`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+        "square-version": SQUARE_API_VERSION,
       },
-    }),
-  });
+      body: JSON.stringify({
+        idempotency_key: `${id}-${requestId}`.slice(0, 192),
+        description: `Carolina Sedan reservation ${id}`,
+        payment_note: `Carolina Sedan reservation ${id}`,
+        quick_pay: {
+          name: `Carolina Sedan reservation ${id}`,
+          price_money: { amount, currency: "USD" },
+          location_id: locationId,
+        },
+      }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const message = controller.signal.aborted
+      ? "Square did not respond in time. No payment link was created."
+      : "Square could not be reached. No payment link was created.";
+    return json({ error: message }, 504);
+  } finally {
+    clearTimeout(timeout);
+  }
   const result = await response.json().catch(() => ({}));
   if (!response.ok) return json({ error: squareErrorMessage(result, response.status) }, 502);
 

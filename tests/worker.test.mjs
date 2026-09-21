@@ -445,6 +445,43 @@ test("Square API failure does not save a payment link or expose credentials", as
   }
 });
 
+test("Square timeout fails safely without saving a payment link", async () => {
+  const kv = new MemoryKV();
+  await kv.put(
+    "reservation:CSS-20260910-ABC123",
+    JSON.stringify(sampleReservation({ status: "confirmed", quotedPrice: "95" }))
+  );
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+  });
+  const env = {
+    RESERVATIONS: kv,
+    ADMIN_TOKEN: "owner-secret",
+    SQUARE_ACCESS_TOKEN: "never-show-this-token",
+    SQUARE_LOCATION_ID: "LOCATION123",
+    SQUARE_ENVIRONMENT: "sandbox",
+    SQUARE_REQUEST_TIMEOUT_MS: "100",
+  };
+
+  try {
+    const response = await worker.fetch(
+      squareLinkRequest({ id: "CSS-20260910-ABC123", quotedPrice: "95", squareRequestId: "square-timeout-1" }),
+      env
+    );
+    const body = await response.json();
+    assert.equal(response.status, 504);
+    assert.match(body.error, /did not respond in time/i);
+    assert.doesNotMatch(body.error, /never-show-this-token/);
+
+    const stored = await kv.get("reservation:CSS-20260910-ABC123", "json");
+    assert.equal(stored.paymentLink, undefined);
+    assert.equal(stored.squareOrderId, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Square link cannot replace a link that was already sent or a paid reservation", async () => {
   const kv = new MemoryKV();
   const env = { RESERVATIONS: kv, ADMIN_TOKEN: "owner-secret" };
