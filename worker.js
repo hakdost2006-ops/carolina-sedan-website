@@ -69,6 +69,7 @@ const PAGE_ROUTES = {
   "/rdu-airport-transportation-chapel-hill": "/rdu-airport-transportation-chapel-hill.html",
   "/rdu-parking-time-tips-may-2026": "/rdu-parking-time-tips-may-2026.html",
   "/reservation": "/reservation.html",
+  "/services": "/services.html",
   "/triangle-travel-advisory-july-14-19-2026": "/triangle-travel-advisory-july-14-19-2026.html",
   "/triangle-travel-advisory-july-27-august-2-2026":
     "/triangle-travel-advisory-july-27-august-2-2026.html",
@@ -76,6 +77,8 @@ const PAGE_ROUTES = {
     "/triangle-travel-update-rdu-terminal-2-raleigh-roadwork-durham-detour-may-2026.html",
   "/triangle-placenta-symposium-transportation-2026":
     "/triangle-placenta-symposium-transportation-2026.html",
+  "/transportation-partner-support-triangle":
+    "/transportation-partner-support-triangle.html",
   "/unc-baseball-super-regional-weekend-travel-2026": "/unc-baseball-super-regional-weekend-travel-2026.html",
   "/unc-department-transportation": "/unc-department-transportation.html",
   "/unc-health-championship-raleigh-ride-tips-2026": "/unc-health-championship-raleigh-ride-tips-2026.html",
