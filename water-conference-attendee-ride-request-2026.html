@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Water and Health Conference Ride Request | Carolina Sedan</title>
+    <meta name="description" content="Request airport, hotel, or local transportation for the October 2026 UNC Water and Health Conference in Chapel Hill." />
+    <meta name="robots" content="noindex, follow" />
+    <link rel="canonical" href="https://www.carolinasedan.com/water-conference-attendee-ride-request-2026" />
+    <link rel="icon" href="/assets/carolina-sedan-logo.jpeg" type="image/jpeg" />
+    <link rel="stylesheet" href="/styles.css?v=20260910" />
+    <style>
+      .attendee-intro { width:min(1120px,calc(100% - 36px)); margin:0 auto; padding:48px 0 30px; display:grid; grid-template-columns:minmax(0,1.4fr) minmax(240px,.6fr); gap:36px; align-items:center; }
+      .attendee-intro h1 { font-size:4rem; line-height:1.05; }
+      .attendee-intro p { max-width:650px; color:var(--muted); }
+      .attendee-intro figure { margin:0; }
+      .attendee-intro img { display:block; width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:8px; }
+      .attendee-intro .hero-actions { margin-bottom:0; }
+      .attendee-booking { padding-top:30px; }
+      .attendee-booking h2 { font-size:2rem; line-height:1.15; }
+      .attendee-booking .booking-form { align-self:start; }
+      .attendee-facts { width:min(1120px,calc(100% - 36px)); margin:0 auto; padding:22px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:var(--muted); }
+      .attendee-facts strong { color:var(--ink); }
+      .attendee-booking .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+      .attendee-booking .form-grid .wide { grid-column:1/-1; }
+      .attendee-booking .contact-card span a { font-size:inherit; }
+      .attendee-help { padding-top:30px; }
+      .attendee-help h2 { font-size:2rem; }
+      @media(max-width:860px) { .attendee-intro { grid-template-columns:1fr; } .attendee-intro figure { display:none; } }
+      @media(max-width:560px) { .attendee-intro h1 { font-size:2.5rem; } .attendee-booking .form-grid { grid-template-columns:1fr; } .attendee-booking .booking-form { padding:18px; } }
+    </style>
+    <script defer src="/script.js?v=20260910"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Carolina Sedan Service home">
+        <img class="brand-logo" src="/assets/carolina-sedan-logo.jpeg" alt="" />
+        <span><strong>Carolina Sedan</strong><small>Chapel Hill car service</small></span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="/services">Services</a><a href="/event-transportation-triangle">Events</a><a href="/about">About</a><a href="/#fleet">Fleet</a><a href="/news">News</a><a href="#book">Book</a>
+      </nav>
+      <a class="header-call" href="tel:+19199240568">Call 24/7</a>
+    </header>
+
+    <main>
+      <section class="attendee-intro" aria-labelledby="attendee-title">
+        <div>
+          <p class="eyebrow">October 26-30, 2026 | Chapel Hill</p>
+          <h1 id="attendee-title">Request your conference ride.</h1>
+          <p>Traveling to the UNC Water and Health Conference? Send Carolina Sedan your airport, hotel, Friday Center, or local ride details. We will review availability and follow up with a pickup plan and quote.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="#book">Request a ride</a>
+            <a class="button quiet" href="tel:+19199240568">Call 919-924-0568</a>
+          </div>
+        </div>
+        <figure><img src="/assets/carolina-lexus.jpeg" alt="Carolina Sedan vehicle for scheduled Chapel Hill transportation" /></figure>
+      </section>
+
+      <div class="attendee-facts">
+        <strong>Conference:</strong> October 26-30 at the Friday Center, Chapel Hill. Check the <a class="text-link" href="https://register.waterandhealthconference.com/" target="_blank" rel="noopener">official event site</a> for current program details.
+      </div>
+
+      <section class="section booking attendee-booking" id="book" aria-labelledby="book-title">
+        <div>
+          <p class="eyebrow">Ride Details</p>
+          <h2 id="book-title">Tell us where and when you need to travel.</h2>
+          <p>Submit one pickup below. For a return ride or several stops, include the other dates and times in Notes. Please include flight details for RDU pickups.</p>
+          <p>This request does not reserve a seat on an organizer-arranged shuttle. If the conference provides group transportation, follow the instructions you receive from its organizers.</p>
+          <p><strong>No payment is collected here.</strong> A ride is confirmed only after Carolina Sedan reviews availability and sends you direct confirmation.</p>
+          <div class="contact-card">
+            <strong>Need help planning an itinerary?</strong>
+            <a href="tel:+19199240568">919-924-0568</a>
+            <span>Or email <a class="text-link" href="mailto:booking@carolinasedan.com">booking@carolinasedan.com</a></span>
+          </div>
+        </div>
+        <form class="booking-form reservation-engine-form" id="reservation-form" data-engine="stage-one" action="/api/reservation" method="post">
+          <input class="hidden-field" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
+          <input type="hidden" name="form-started-at" value="" />
+          <input type="hidden" name="campaign" value="event_unc_water_health_2026_attendee_share" />
+          <div class="form-grid">
+            <label>Name<input type="text" name="name" autocomplete="name" required /></label>
+            <label>Mobile phone<input type="tel" name="phone" autocomplete="tel" required /></label>
+            <label class="wide">Email<input type="email" name="email" autocomplete="email" required /></label>
+            <label>Ride type
+              <select name="ride-type" required>
+                <option value="Conference airport transfer">RDU airport transfer</option>
+                <option value="Conference hotel and venue transfer">Hotel to/from Friday Center</option>
+                <option value="Conference local transfer">Other local ride</option>
+              </select>
+            </label>
+            <label>Pickup date and time<input type="datetime-local" name="pickup-time" required /></label>
+            <label>Passengers<input type="number" name="passengers" min="1" value="1" required /></label>
+            <label>Luggage<input type="text" name="luggage" placeholder="For example, 2 suitcases" /></label>
+            <label class="wide">Pickup location<input type="text" name="pickup-address" placeholder="Airport, hotel, or street address" required /></label>
+            <label class="wide">Destination<input type="text" name="destination-address" placeholder="Hotel, Friday Center, or other address" required /></label>
+            <label>Flight number, if applicable<input type="text" name="flight-number" placeholder="Airline and flight number" /></label>
+            <label>How did you hear about us?
+              <select name="lead-source" required>
+                <option value="">Select one</option>
+                <option value="Conference email or shared link">Conference email or shared link</option>
+                <option value="Google Search">Google Search</option>
+                <option value="Friend or repeat customer">Friend or repeat customer</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+          </div>
+          <label>Notes
+            <textarea name="details" rows="4" placeholder="Return rides, additional stops, timing, or billing contact"></textarea>
+          </label>
+          <div class="reservation-summary" id="reservation-summary" hidden></div>
+          <button class="button primary full" type="submit">Send ride request</button>
+          <p class="form-note" id="reservation-status">This is a request, not a confirmed reservation. Carolina Sedan will review availability, price, and payment arrangements before confirming any ride.</p>
+        </form>
+      </section>
+
+      <section class="section attendee-help" aria-labelledby="planning-title">
+        <p class="eyebrow">Travel Planning</p>
+        <h2 id="planning-title">Need more conference travel details?</h2>
+        <p>Our <a class="text-link" href="/unc-water-health-conference-transportation-2026">conference transportation guide</a> covers RDU arrivals, Chapel Hill hotels, the Friday Center, and return-flight planning.</p>
+      </section>
+      <aside class="independent-notice">
+        <strong>Independent provider notice</strong>
+        <p>Carolina Sedan is an independent transportation provider. This is not conference registration, and Carolina Sedan is not an official or exclusive transportation provider of the UNC Water and Health Conference or UNC.</p>
+      </aside>
+    </main>
+
+    <footer class="site-footer">
+      <p>Carolina Sedan Service | Chapel Hill, North Carolina</p>
+      <div class="footer-links"><a href="tel:+19199240568">919-924-0568</a><a href="mailto:booking@carolinasedan.com">Email</a></div>
+    </footer>
+  </body>
+</html>
