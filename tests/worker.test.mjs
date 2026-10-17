@@ -118,6 +118,24 @@ function sampleReservation(overrides = {}) {
   };
 }
 
+test("conference attendee link serves the dedicated request page", async () => {
+  let assetPath = "";
+  const response = await worker.fetch(
+    new Request("https://www.carolinasedan.com/water-conference-attendee-ride-request-2026"),
+    {
+      ASSETS: {
+        fetch: async (request) => {
+          assetPath = new URL(request.url).pathname;
+          return new Response("attendee page", { status: 200 });
+        },
+      },
+    }
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(assetPath, "/water-conference-attendee-ride-request-2026.html");
+});
+
 test("solicitation disguised as a reservation is silently blocked", async () => {
   const kv = new MemoryKV();
   let emailCalls = 0;
