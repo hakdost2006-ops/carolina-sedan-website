@@ -88,6 +88,8 @@ const PAGE_ROUTES = {
   "/unc-notre-dame-transportation-2026": "/unc-notre-dame-transportation-2026.html",
   "/unc-water-health-conference-transportation-2026":
     "/unc-water-health-conference-transportation-2026.html",
+  "/water-conference-attendee-ride-request-2026":
+    "/water-conference-attendee-ride-request-2026.html",
   "/unc-visual-discovery-conference-transportation-2026":
     "/unc-visual-discovery-conference-transportation-2026.html",
 };
